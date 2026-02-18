@@ -337,18 +337,14 @@ const DEF_ALLOW = {UK:25,India:21};
 // ─── MSAL Auth ────────────────────────────────────────────────────────────────
 async function signIn() {
   try {
-    showLoading('Signing you in…');
-    const result = await msalApp.loginPopup({ scopes: SCOPES });
-    msalApp.setActiveAccount(result.account);
-    await bootApp();
+    await msalApp.loginRedirect({ scopes: SCOPES });
   } catch(e) {
-    hideLoading();
     if (e.errorCode !== 'user_cancelled') alert('Sign in failed: ' + e.message);
   }
 }
 
 function signOut() {
-  msalApp.logoutPopup({ account: msalApp.getActiveAccount() });
+  msalApp.logoutRedirect({ account: msalApp.getActiveAccount() });
 }
 
 async function getToken() {
@@ -358,7 +354,7 @@ async function getToken() {
     const r = await msalApp.acquireTokenSilent({ scopes: SCOPES, account });
     return r.accessToken;
   } catch {
-    const r = await msalApp.acquireTokenPopup({ scopes: SCOPES });
+    const r = await msalApp.acquireTokenRedirect({ scopes: SCOPES });
     return r.accessToken;
   }
 }
@@ -1659,10 +1655,22 @@ function dlCSV(rows,filename){
   if (signInBtn) { signInBtn.disabled = true; signInBtn.textContent = 'Loading...'; }
   try {
     msalApp = await msal.PublicClientApplication.createPublicClientApplication(msalConfig);
+
+    // Handle redirect response first (called after Microsoft redirects back)
+    const response = await msalApp.handleRedirectPromise();
+    if (response) {
+      msalApp.setActiveAccount(response.account);
+      await bootApp();
+      return;
+    }
+
+    // Re-enable sign in button
     if (signInBtn) {
       signInBtn.disabled = false;
       signInBtn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
     }
+
+    // Check if already signed in from a previous session
     const accounts = msalApp.getAllAccounts();
     if (accounts.length > 0) {
       msalApp.setActiveAccount(accounts[0]);
