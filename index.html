@@ -302,7 +302,7 @@ const msalConfig = {
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
 };
 
-const msal = new msal.PublicClientApplication(msalConfig);
+const msalApp = new msal.PublicClientApplication(msalConfig);
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
@@ -337,8 +337,8 @@ const DEF_ALLOW = {UK:25,India:21};
 async function signIn() {
   try {
     showLoading('Signing you in…');
-    const result = await msal.loginPopup({ scopes: SCOPES });
-    msal.setActiveAccount(result.account);
+    const result = await msalApp.loginPopup({ scopes: SCOPES });
+    msalApp.setActiveAccount(result.account);
     await bootApp();
   } catch(e) {
     hideLoading();
@@ -347,17 +347,17 @@ async function signIn() {
 }
 
 function signOut() {
-  msal.logoutPopup({ account: msal.getActiveAccount() });
+  msalApp.logoutPopup({ account: msalApp.getActiveAccount() });
 }
 
 async function getToken() {
-  const account = msal.getActiveAccount();
+  const account = msalApp.getActiveAccount();
   if (!account) throw new Error('Not signed in');
   try {
-    const r = await msal.acquireTokenSilent({ scopes: SCOPES, account });
+    const r = await msalApp.acquireTokenSilent({ scopes: SCOPES, account });
     return r.accessToken;
   } catch {
-    const r = await msal.acquireTokenPopup({ scopes: SCOPES });
+    const r = await msalApp.acquireTokenPopup({ scopes: SCOPES });
     return r.accessToken;
   }
 }
@@ -1654,14 +1654,14 @@ function dlCSV(rows,filename){
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
-  await msal.initialize();
+  await msalApp.initialize();
   // Handle redirect (if any)
-  try { await msal.handleRedirectPromise(); } catch {}
+  try { await msalApp.handleRedirectPromise(); } catch {}
 
   // Check if already signed in
-  const accounts = msal.getAllAccounts();
+  const accounts = msalApp.getAllAccounts();
   if (accounts.length > 0) {
-    msal.setActiveAccount(accounts[0]);
+    msalApp.setActiveAccount(accounts[0]);
     await bootApp();
   }
   // Otherwise login screen is shown by default
