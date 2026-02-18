@@ -1654,19 +1654,25 @@ function dlCSV(rows,filename){
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
-  // Create and initialise MSAL instance
-  msalApp = new msal.PublicClientApplication(msalConfig);
-  await msalApp.initialize();
-  // Handle redirect (if any)
-  try { await msalApp.handleRedirectPromise(); } catch {}
-
-  // Check if already signed in
-  const accounts = msalApp.getAllAccounts();
-  if (accounts.length > 0) {
-    msalApp.setActiveAccount(accounts[0]);
-    await bootApp();
+  const signInBtn = document.querySelector('.ms-btn');
+  if (signInBtn) { signInBtn.disabled = true; signInBtn.textContent = 'Loading...'; }
+  try {
+    msalApp = new msal.PublicClientApplication(msalConfig);
+    await msalApp.initialize();
+    try { await msalApp.handleRedirectPromise(); } catch {}
+    if (signInBtn) {
+      signInBtn.disabled = false;
+      signInBtn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
+    }
+    const accounts = msalApp.getAllAccounts();
+    if (accounts.length > 0) {
+      msalApp.setActiveAccount(accounts[0]);
+      await bootApp();
+    }
+  } catch(e) {
+    if (signInBtn) { signInBtn.disabled = false; signInBtn.textContent = 'Sign in with Microsoft'; }
+    console.error('Init error:', e);
   }
-  // Otherwise login screen is shown by default
 })();
 </script>
 </body>
