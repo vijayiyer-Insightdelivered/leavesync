@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LeaveSync — UK & India Leave Manager</title>
+<title>LeaveSync</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/2.38.0/msal-browser.min.js"></script>
 <style>
   :root{
-    --bg:#F7F6F2;--surface:#FFFFFF;--border:#E6E5DF;--text:#1A1A18;
+    --bg:#F7F6F2;--surface:#FFF;--border:#E6E5DF;--text:#1A1A18;
     --muted:#74726A;--subtle:#F0EFE9;--navy:#0C1D3A;--navy2:#1A3356;
     --uk-bg:#EBF3FF;--uk-text:#1251A3;--uk-acc:#2563EB;
     --in-bg:#FFF2E6;--in-text:#B34500;--in-acc:#EA6C00;
@@ -20,13 +21,30 @@
   body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
   button,input,select,textarea{font-family:inherit;font-size:14px}
   button{cursor:pointer}
-  ::-webkit-scrollbar{width:5px}
-  ::-webkit-scrollbar-thumb{background:#CCC;border-radius:3px}
+  ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CCC;border-radius:3px}
 
-  /* Layout */
-  #app{display:flex;min-height:100vh}
-  #sidebar{width:210px;background:var(--navy);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh}
-  #main{flex:1;padding:28px 32px;overflow-x:auto}
+  /* Login screen */
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--navy) 0%,#1A3356 60%,#0D2A4A 100%)}
+  .login-card{background:#fff;border-radius:20px;padding:48px 44px;max-width:420px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,.35);text-align:center}
+  .login-logo{font-family:'Playfair Display',serif;font-size:38px;color:var(--navy);margin-bottom:6px}
+  .login-sub{font-size:13px;color:var(--muted);margin-bottom:32px;letter-spacing:.3px}
+  .login-divider{height:1px;background:var(--border);margin:28px 0}
+  .login-note{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.6}
+  .ms-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px 20px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;transition:all .18s}
+  .ms-btn:hover{background:#F8F8F8;border-color:#94A3B8;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+  .ms-logo{width:20px;height:20px;display:grid;grid-template-columns:1fr 1fr;gap:2px}
+  .ms-logo div{border-radius:1px}
+
+  /* Loading */
+  #loading-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);flex-direction:column;gap:16px}
+  .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* App layout */
+  #app-screen{display:none;min-height:100vh}
+  #layout{display:flex;min-height:100vh}
+  #sidebar{width:212px;background:var(--navy);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh}
+  #main{flex:1;padding:28px 32px;overflow-x:auto;min-width:0}
 
   /* Sidebar */
   .brand{padding:24px 18px 20px}
@@ -39,60 +57,67 @@
   .nav-btn:hover:not(.active){background:rgba(255,255,255,.07);color:#CBD5E1}
   .nav-icon{font-size:14px;width:18px;text-align:center}
   .sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)}
-  .country-pills{display:flex;gap:7px}
-  .cpill{flex:1;padding:7px 6px;background:rgba(255,255,255,.07);border-radius:8px;text-align:center}
-  .cpill-flag{font-size:14px}
-  .cpill-label{font-size:8.5px;color:#64748B;margin-top:1px}
+  .user-info{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .user-av{width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+  .user-name{font-size:12px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .user-role{font-size:10px;color:#64748B;margin-top:1px}
+  .sign-out-btn{width:100%;padding:7px;border:1px solid rgba(255,255,255,.12);border-radius:7px;background:transparent;color:#94A3B8;font-size:11px;cursor:pointer;transition:all .15s}
+  .sign-out-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+  .country-pills{display:flex;gap:7px;margin-top:10px}
+  .cpill{flex:1;padding:6px;background:rgba(255,255,255,.07);border-radius:7px;text-align:center}
+  .cpill-flag{font-size:13px}
+  .cpill-label{font-size:8px;color:#64748B;margin-top:1px}
   .cpill-count{font-size:13px;color:#fff;font-weight:700}
+
+  /* Role badge */
+  .role-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:18px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .role-admin{background:#FEF3C7;color:#92400E}
+  .role-hr{background:#EDE9FE;color:#5B21B6}
+  .role-manager{background:#DBEAFE;color:#1251A3}
+  .role-employee{background:#ECFDF5;color:#15803D}
 
   /* Top bar */
   #topbar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:24px;flex-wrap:wrap}
-  .year-btn{padding:5px 13px;border:1.5px solid var(--border);border-radius:18px;font-size:12px;font-weight:600;
-    background:#fff;color:var(--muted);transition:all .14s}
+  .year-btn{padding:5px 13px;border:1.5px solid var(--border);border-radius:18px;font-size:12px;font-weight:600;background:#fff;color:var(--muted);transition:all .14s}
   .year-btn.active{border-color:#2563EB;background:#EBF3FF;color:#1251A3}
 
   /* Buttons */
-  .btn-primary{padding:8px 16px;border:none;border-radius:9px;font-weight:600;color:#fff;
-    background:linear-gradient(135deg,var(--navy),var(--navy2));transition:opacity .15s,transform .15s}
+  .btn-primary{padding:8px 16px;border:none;border-radius:9px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--navy),var(--navy2));transition:opacity .15s,transform .15s}
   .btn-primary:hover{opacity:.88;transform:translateY(-1px)}
-  .btn-ghost{padding:8px 16px;border:1.5px solid var(--border);border-radius:9px;font-weight:600;
-    background:#fff;color:var(--muted);transition:all .15s}
+  .btn-ghost{padding:8px 16px;border:1.5px solid var(--border);border-radius:9px;font-weight:600;background:#fff;color:var(--muted);transition:all .15s}
   .btn-ghost:hover{border-color:#94A3B8;color:var(--text)}
   .btn-sm{padding:6px 12px;font-size:12px}
   .btn-danger{border-color:#FCA5A5!important;color:#EF4444!important}
+  .btn-approve{border:none;border-radius:9px;padding:8px 16px;font-weight:600;color:#fff;background:linear-gradient(135deg,#15803D,#16A34A);cursor:pointer;transition:opacity .15s}
+  .btn-approve:hover{opacity:.88}
 
   /* Cards */
-  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}
-  .card:hover{box-shadow:0 4px 18px rgba(0,0,0,.09)}
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);transition:box-shadow .18s}
   .card-header{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid var(--border)}
   .card-title{font-size:14px;font-weight:700;color:var(--navy)}
 
   /* Page header */
-  .page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px}
+  .page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:12px}
   .page-title{font-family:'Playfair Display',serif;font-size:26px;color:var(--navy);letter-spacing:-.3px}
   .page-sub{font-size:12px;color:var(--muted);margin-top:3px}
 
-  /* KPI grid */
+  /* KPIs */
   .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-  .kpi{background:var(--surface);border-radius:var(--radius);padding:18px 16px 15px;box-shadow:var(--shadow);border-top:3px solid transparent;transition:box-shadow .18s,transform .18s;cursor:default}
+  .kpi{background:var(--surface);border-radius:var(--radius);padding:18px 16px 15px;box-shadow:var(--shadow);border-top:3px solid transparent;transition:box-shadow .18s,transform .18s}
   .kpi:hover{box-shadow:0 6px 22px rgba(0,0,0,.09);transform:translateY(-1px)}
   .kpi-icon{font-size:22px;margin-bottom:8px}
   .kpi-val{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:var(--navy);line-height:1}
   .kpi-label{font-size:13px;font-weight:600;color:var(--text);margin-top:5px}
   .kpi-sub{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* Country row */
-  .country-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
-  .country-card{background:var(--surface);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
-
-  /* Progress bar */
+  /* Progress */
   .progress-track{background:var(--subtle);border-radius:4px;height:6px;overflow:hidden}
   .progress-fill{height:100%;border-radius:4px;transition:width .5s ease}
 
   /* Tables */
   .tbl{width:100%;border-collapse:collapse}
   .tbl th{padding:8px 12px;font-size:9.5px;font-weight:700;color:var(--muted);text-align:left;text-transform:uppercase;letter-spacing:.5px;background:var(--subtle)}
-  .tbl td{padding:9px 12px;border-bottom:1px solid var(--border)}
+  .tbl td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
   .tbl tr:last-child td{border-bottom:none}
   .tbl tr:hover td{background:#F9F8F4}
   .tbl-click tr{cursor:pointer}
@@ -116,7 +141,7 @@
   .mini-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:1px}
 
   /* Employee grid */
-  .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:13px}
+  .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:13px}
   .emp-card{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);transition:box-shadow .18s,transform .18s}
   .emp-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.09);transform:translateY(-1px)}
 
@@ -140,14 +165,11 @@
   .field{margin-bottom:13px}
   .field-label{display:block;font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
-  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
   .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
   .cf-box{background:var(--subtle);border-radius:9px;padding:13px;margin-bottom:14px}
   .cf-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px}
   .modal-actions{display:flex;gap:9px;margin-top:18px}
   .check-row{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:9px}
-
-  /* Balance chip */
   .bal-chip{padding:9px 12px;border-radius:8px;display:flex;align-items:center;gap:8px;margin-bottom:13px;font-size:12.5px;font-weight:500}
   .bal-ok{background:var(--green-bg);color:var(--green)}
   .bal-warn{background:var(--red-bg);color:var(--red)}
@@ -162,100 +184,139 @@
   .cal-today .cal-num{background:var(--navy);color:#fff;font-weight:700}
   .cal-tag{font-size:7.5px;padding:1px 3px;border-radius:3px;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* Reports bars */
+  /* Error banner */
+  .error-banner{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px 18px;margin-bottom:16px;color:var(--red);font-size:13px;display:flex;align-items:center;gap:8px}
+  .info-banner{background:var(--uk-bg);border:1px solid #BFDBFE;border-radius:10px;padding:14px 18px;margin-bottom:16px;color:var(--uk-text);font-size:13px;display:flex;align-items:center;gap:8px}
+
+  /* Rep bars */
   .rep-bar-track{background:var(--subtle);border-radius:5px;height:10px;overflow:hidden}
   .rep-bar-fill{height:100%;border-radius:5px;transition:width .6s ease}
 
   /* Toast */
-  .toast{position:fixed;bottom:22px;right:26px;padding:10px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:500;
-    box-shadow:0 8px 28px rgba(0,0,0,.22);z-index:9999;display:flex;align-items:center;gap:7px;animation:fi .16s ease}
-  .toast-ok{background:var(--navy)}
-  .toast-err{background:var(--red)}
+  .toast{position:fixed;bottom:22px;right:26px;padding:10px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:500;box-shadow:0 8px 28px rgba(0,0,0,.22);z-index:9999;display:flex;align-items:center;gap:7px;animation:fi .16s ease}
+  .toast-ok{background:var(--navy)}.toast-err{background:var(--red)}
 
-  /* Utils */
   .link{color:#2563EB;cursor:pointer;font-size:11.5px;font-weight:500}
-  .link:hover{text-decoration:underline}
   .section-two{display:grid;grid-template-columns:370px 1fr;gap:14px}
+  .country-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+  .country-card{background:var(--surface);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 
   @keyframes fu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fi{from{opacity:0}to{opacity:1}}
-  @keyframes tab-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-  .tab-content{animation:tab-in .24s ease both}
+  @keyframes tab-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .tab-content{animation:tab-in .22s ease both}
 
-  /* Responsive */
   @media(max-width:900px){
     #sidebar{width:56px}
     .brand,.brand-sub,.nav-btn span:last-child,.sidebar-footer{display:none}
     .nav-btn{justify-content:center;padding:12px 0}
-    .nav-icon{width:auto}
     #main{padding:16px}
     .kpi-grid{grid-template-columns:1fr 1fr}
-    .country-row{grid-template-columns:1fr}
-    .section-two{grid-template-columns:1fr}
+    .country-row,.section-two{grid-template-columns:1fr}
   }
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="sidebar">
-    <div class="brand">
-      <div class="brand-name">Leave<br>Sync</div>
-      <div class="brand-sub">UK · India Manager</div>
-    </div>
-    <nav id="nav"></nav>
-    <div class="sidebar-footer">
-      <div class="country-pills">
-        <div class="cpill"><div class="cpill-flag">🇬🇧</div><div class="cpill-label">UK</div><div class="cpill-count" id="pill-uk">0</div></div>
-        <div class="cpill"><div class="cpill-flag">🇮🇳</div><div class="cpill-label">India</div><div class="cpill-count" id="pill-india">0</div></div>
-      </div>
-    </div>
-  </div>
 
-  <div id="main">
-    <div id="topbar">
-      <span style="font-size:12px;color:var(--muted);font-weight:500">Year:</span>
-      <button class="year-btn" data-year="2024">2024</button>
-      <button class="year-btn" data-year="2025">2025</button>
-      <button class="year-btn" data-year="2026">2026</button>
-      <button class="btn-primary btn-sm" id="btn-apply" style="margin-left:6px">+ Apply Leave</button>
-      <button class="btn-ghost btn-sm" id="btn-add-emp">+ Add Employee</button>
-    </div>
-    <div id="content"></div>
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">LeaveSync</div>
+    <div class="login-sub">UK & India Leave Manager · Insight Delivered</div>
+    <div class="login-divider"></div>
+    <button class="ms-btn" onclick="signIn()">
+      <div class="ms-logo">
+        <div style="background:#F25022"></div><div style="background:#7FBA00"></div>
+        <div style="background:#00A4EF"></div><div style="background:#FFB900"></div>
+      </div>
+      Sign in with Microsoft
+    </button>
+    <div class="login-note">Use your Insight Delivered Microsoft 365 account.<br>Your role and permissions are managed by your admin.</div>
   </div>
 </div>
 
-<!-- Toast -->
-<div id="toast" class="toast" style="display:none"></div>
+<!-- Loading -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:13px" id="loading-msg">Signing you in…</div>
+</div>
 
-<!-- Modals -->
+<!-- App -->
+<div id="app-screen">
+  <div id="layout">
+    <div id="sidebar">
+      <div class="brand">
+        <div class="brand-name">Leave<br>Sync</div>
+        <div class="brand-sub">UK · India Manager</div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-av" id="user-av">?</div>
+          <div style="min-width:0">
+            <div class="user-name" id="user-name">—</div>
+            <div class="user-role" id="user-role-label">—</div>
+          </div>
+        </div>
+        <button class="sign-out-btn" onclick="signOut()">Sign out</button>
+        <div class="country-pills">
+          <div class="cpill"><div class="cpill-flag">🇬🇧</div><div class="cpill-label">UK</div><div class="cpill-count" id="pill-uk">0</div></div>
+          <div class="cpill"><div class="cpill-flag">🇮🇳</div><div class="cpill-label">India</div><div class="cpill-count" id="pill-india">0</div></div>
+        </div>
+      </div>
+    </div>
+    <div id="main">
+      <div id="topbar">
+        <span style="font-size:12px;color:var(--muted);font-weight:500">Year:</span>
+        <button class="year-btn" data-year="2024">2024</button>
+        <button class="year-btn" data-year="2025">2025</button>
+        <button class="year-btn" data-year="2026">2026</button>
+        <button class="btn-primary btn-sm" id="btn-apply" style="margin-left:6px;display:none">+ Apply Leave</button>
+        <button class="btn-primary btn-sm" id="btn-add-emp" style="display:none">+ Add Employee</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
 <div id="modal-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeModal()">
   <div id="modal-box" class="modal"></div>
 </div>
 
 <script>
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const PUBLIC_HOLIDAYS = {
-  UK:{
-    2024:[{d:"2024-01-01",n:"New Year's Day"},{d:"2024-03-29",n:"Good Friday"},{d:"2024-04-01",n:"Easter Monday"},{d:"2024-05-06",n:"Early May Bank Holiday"},{d:"2024-05-27",n:"Spring Bank Holiday"},{d:"2024-08-26",n:"Summer Bank Holiday"},{d:"2024-12-25",n:"Christmas Day"},{d:"2024-12-26",n:"Boxing Day"}],
-    2025:[{d:"2025-01-01",n:"New Year's Day"},{d:"2025-04-18",n:"Good Friday"},{d:"2025-04-21",n:"Easter Monday"},{d:"2025-05-05",n:"Early May Bank Holiday"},{d:"2025-05-26",n:"Spring Bank Holiday"},{d:"2025-08-25",n:"Summer Bank Holiday"},{d:"2025-12-25",n:"Christmas Day"},{d:"2025-12-26",n:"Boxing Day"}],
-    2026:[{d:"2026-01-01",n:"New Year's Day"},{d:"2026-04-03",n:"Good Friday"},{d:"2026-04-06",n:"Easter Monday"},{d:"2026-05-04",n:"Early May Bank Holiday"},{d:"2026-05-25",n:"Spring Bank Holiday"},{d:"2026-08-31",n:"Summer Bank Holiday"},{d:"2026-12-25",n:"Christmas Day"},{d:"2026-12-28",n:"Boxing Day (substitute)"}],
+// ─── Config ───────────────────────────────────────────────────────────────────
+const CLIENT_ID   = '9aef5a1d-3e5a-4e8e-bb2b-43f01bd60c95';
+const TENANT_ID   = '88c82b29-b553-4794-980c-010e970904c7';
+const SITE_URL    = 'https://insightdelivered.sharepoint.com/sites/TeamDocuments';
+const GRAPH_BASE  = 'https://graph.microsoft.com/v1.0';
+
+const SCOPES = ['User.Read','Sites.ReadWrite.All'];
+
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.origin + window.location.pathname,
   },
-  India:{
-    2024:[{d:"2024-01-26",n:"Republic Day"},{d:"2024-03-25",n:"Holi"},{d:"2024-04-14",n:"Dr. Ambedkar Jayanti"},{d:"2024-04-19",n:"Good Friday"},{d:"2024-08-15",n:"Independence Day"},{d:"2024-10-02",n:"Gandhi Jayanti"},{d:"2024-10-12",n:"Dussehra"},{d:"2024-11-01",n:"Diwali"},{d:"2024-11-15",n:"Guru Nanak Jayanti"},{d:"2024-12-25",n:"Christmas Day"}],
-    2025:[{d:"2025-01-26",n:"Republic Day"},{d:"2025-03-14",n:"Holi"},{d:"2025-04-14",n:"Dr. Ambedkar Jayanti"},{d:"2025-04-18",n:"Good Friday"},{d:"2025-05-12",n:"Buddha Purnima"},{d:"2025-08-15",n:"Independence Day"},{d:"2025-08-27",n:"Janmashtami"},{d:"2025-10-02",n:"Gandhi Jayanti"},{d:"2025-10-20",n:"Diwali"},{d:"2025-11-05",n:"Guru Nanak Jayanti"},{d:"2025-12-25",n:"Christmas Day"}],
-    2026:[{d:"2026-01-26",n:"Republic Day"},{d:"2026-03-04",n:"Holi"},{d:"2026-04-14",n:"Dr. Ambedkar Jayanti"},{d:"2026-04-03",n:"Good Friday"},{d:"2026-08-15",n:"Independence Day"},{d:"2026-10-02",n:"Gandhi Jayanti"},{d:"2026-10-19",n:"Diwali"},{d:"2026-12-25",n:"Christmas Day"}],
-  }
+  cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
 };
 
-const LEAVE_TYPES = ["Annual Leave","Sick Leave","Maternity/Paternity Leave","Compassionate Leave","Study Leave","Unpaid Leave"];
-const DEF_ALLOW = {UK:25,India:21};
+const msal = new msal.PublicClientApplication(msalConfig);
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let state = {
-  tab: 'dashboard',
-  year: new Date().getFullYear(),
+const S = {
+  user: null,         // Azure AD user object
+  role: null,         // 'Admin','HR','Manager','Employee'
+  myEmpRecord: null,  // Their row in LS_Employees
+  siteId: null,       // SharePoint site ID
+  lists: {},          // { Employees, LeaveRequests, Roles, PublicHolidays } => list IDs
   employees: [],
   leaves: [],
+  holidays: [],
+  roles: [],
+  tab: 'dashboard',
+  year: new Date().getFullYear(),
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   reportView: 'summary',
@@ -266,146 +327,322 @@ let state = {
   empCountry: 'All',
   empSearch: '',
   holYear: null,
+  loading: false,
 };
 
-// ─── Persistence ──────────────────────────────────────────────────────────────
-function persist(){
-  try{
-    localStorage.setItem('ls_employees', JSON.stringify(state.employees));
-    localStorage.setItem('ls_leaves',    JSON.stringify(state.leaves));
-  }catch(e){}
-}
+const LEAVE_TYPES = ['Annual Leave','Sick Leave','Maternity/Paternity Leave','Compassionate Leave','Study Leave','Unpaid Leave'];
+const DEF_ALLOW = {UK:25,India:21};
 
-function hydrate(){
-  try{
-    const e=localStorage.getItem('ls_employees');
-    const l=localStorage.getItem('ls_leaves');
-    if(e) state.employees=JSON.parse(e);
-    else  state.employees=seedEmployees();
-    if(l) state.leaves=JSON.parse(l);
-    else  state.leaves=seedLeaves();
-  }catch{
-    state.employees=seedEmployees();
-    state.leaves=seedLeaves();
+// ─── MSAL Auth ────────────────────────────────────────────────────────────────
+async function signIn() {
+  try {
+    showLoading('Signing you in…');
+    const result = await msal.loginPopup({ scopes: SCOPES });
+    msal.setActiveAccount(result.account);
+    await bootApp();
+  } catch(e) {
+    hideLoading();
+    if (e.errorCode !== 'user_cancelled') alert('Sign in failed: ' + e.message);
   }
 }
 
-function seedEmployees(){
-  return [
-    {id:'e1',name:'Alex Castle',   role:'Sales Director',      country:'UK',   allowance:25,joinDate:'2022-03-01',cfEnabled:true, cfMax:5},
-    {id:'e2',name:'Priya Sharma',  role:'Data Analyst',        country:'India',allowance:21,joinDate:'2023-06-15',cfEnabled:true, cfMax:5},
-    {id:'e3',name:'James Wright',  role:'Solutions Architect', country:'UK',   allowance:28,joinDate:'2021-01-10',cfEnabled:true, cfMax:5},
-    {id:'e4',name:'Anita Patel',   role:'BI Developer',        country:'India',allowance:21,joinDate:'2024-09-01',cfEnabled:false,cfMax:5},
-    {id:'e5',name:'Tom Henderson', role:'Project Manager',     country:'UK',   allowance:25,joinDate:'2025-02-01',cfEnabled:true, cfMax:3},
-    {id:'e6',name:'Deepa Nair',    role:'QA Engineer',         country:'India',allowance:21,joinDate:'2023-11-15',cfEnabled:true, cfMax:5},
-  ];
+function signOut() {
+  msal.logoutPopup({ account: msal.getActiveAccount() });
 }
 
-function seedLeaves(){
-  return [
-    {id:'l1',empId:'e1',type:'Annual Leave',start:'2025-03-10',end:'2025-03-14',days:5,reason:'Family holiday',  status:'Approved',applied:'2025-02-15'},
-    {id:'l2',empId:'e2',type:'Sick Leave',  start:'2025-02-03',end:'2025-02-04',days:2,reason:'Unwell',          status:'Approved',applied:'2025-02-03'},
-    {id:'l3',empId:'e3',type:'Annual Leave',start:'2025-04-22',end:'2025-04-25',days:4,reason:'Easter break',    status:'Pending', applied:'2025-02-10'},
-    {id:'l4',empId:'e4',type:'Annual Leave',start:'2025-10-20',end:'2025-10-22',days:1,reason:'Diwali',          status:'Approved',applied:'2025-09-01'},
-    {id:'l5',empId:'e5',type:'Annual Leave',start:'2025-06-02',end:'2025-06-06',days:5,reason:'Summer break',    status:'Pending', applied:'2025-03-01'},
-    {id:'l6',empId:'e6',type:'Sick Leave',  start:'2025-01-20',end:'2025-01-21',days:2,reason:'Fever',           status:'Approved',applied:'2025-01-20'},
-    {id:'l7',empId:'e1',type:'Annual Leave',start:'2024-12-23',end:'2024-12-27',days:3,reason:'Christmas',       status:'Approved',applied:'2024-11-01'},
-    {id:'l8',empId:'e3',type:'Annual Leave',start:'2024-08-05',end:'2024-08-16',days:10,reason:'Summer holiday', status:'Approved',applied:'2024-06-01'},
-  ];
+async function getToken() {
+  const account = msal.getActiveAccount();
+  if (!account) throw new Error('Not signed in');
+  try {
+    const r = await msal.acquireTokenSilent({ scopes: SCOPES, account });
+    return r.accessToken;
+  } catch {
+    const r = await msal.acquireTokenPopup({ scopes: SCOPES });
+    return r.accessToken;
+  }
+}
+
+async function graphGet(path) {
+  const token = await getToken();
+  const r = await fetch(GRAPH_BASE + path, {
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+  });
+  if (!r.ok) throw new Error(`Graph error ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+async function graphPost(path, body) {
+  const token = await getToken();
+  const r = await fetch(GRAPH_BASE + path, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`Graph error ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+async function graphPatch(path, body) {
+  const token = await getToken();
+  const r = await fetch(GRAPH_BASE + path, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`Graph error ${r.status}: ${await r.text()}`);
+  return r.status === 204 ? {} : r.json();
+}
+
+async function graphDelete(path) {
+  const token = await getToken();
+  const r = await fetch(GRAPH_BASE + path, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!r.ok) throw new Error(`Graph error ${r.status}: ${await r.text()}`);
+}
+
+// ─── SharePoint helpers ───────────────────────────────────────────────────────
+async function getSiteId() {
+  const hostname = 'insightdelivered.sharepoint.com';
+  const sitePath = '/sites/TeamDocuments';
+  const data = await graphGet(`/sites/${hostname}:${sitePath}`);
+  return data.id;
+}
+
+async function getListId(siteId, listName) {
+  const data = await graphGet(`/sites/${siteId}/lists?$filter=displayName eq '${listName}'`);
+  if (!data.value || data.value.length === 0) throw new Error(`List '${listName}' not found`);
+  return data.value[0].id;
+}
+
+async function getListItems(siteId, listId, filter = '', select = '') {
+  let url = `/sites/${siteId}/lists/${listId}/items?$expand=fields&$top=500`;
+  if (filter) url += `&$filter=${encodeURIComponent(filter)}`;
+  if (select) url += `&$select=${select}`;
+  const data = await graphGet(url);
+  return data.value.map(i => ({ id: i.id, ...i.fields }));
+}
+
+async function createListItem(siteId, listId, fields) {
+  return graphPost(`/sites/${siteId}/lists/${listId}/items`, { fields });
+}
+
+async function updateListItem(siteId, listId, itemId, fields) {
+  return graphPatch(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, fields);
+}
+
+async function deleteListItem(siteId, listId, itemId) {
+  return graphDelete(`/sites/${siteId}/lists/${listId}/items/${itemId}`);
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+async function bootApp() {
+  showLoading('Loading your workspace…');
+  try {
+    // Get user profile
+    const me = await graphGet('/me?$select=id,displayName,mail,userPrincipalName');
+    S.user = me;
+
+    // Get SharePoint site
+    setLoadingMsg('Connecting to SharePoint…');
+    S.siteId = await getSiteId();
+
+    // Get list IDs
+    setLoadingMsg('Loading lists…');
+    const listNames = ['LS_Employees','LS_LeaveRequests','LS_Roles','LS_PublicHolidays'];
+    const listIds = await Promise.all(listNames.map(n => getListId(S.siteId, n).catch(() => null)));
+    S.lists = {
+      Employees:      listIds[0],
+      LeaveRequests:  listIds[1],
+      Roles:          listIds[2],
+      PublicHolidays: listIds[3],
+    };
+
+    // Check for missing lists
+    const missing = listNames.filter((_,i) => !listIds[i]);
+    if (missing.length > 0) {
+      hideLoading();
+      showSetupError(missing);
+      return;
+    }
+
+    // Load all data
+    setLoadingMsg('Loading team data…');
+    await loadAllData();
+
+    // Determine role
+    const myRole = S.roles.find(r => r.AzureObjectId === S.user.id);
+    S.role = myRole?.Role || 'Employee';
+    S.myEmpRecord = S.employees.find(e => e.AzureObjectId === S.user.id);
+
+    showApp();
+  } catch(e) {
+    hideLoading();
+    console.error(e);
+    showError('Failed to load: ' + e.message);
+  }
+}
+
+async function loadAllData() {
+  const [employees, leaves, roles, holidays] = await Promise.all([
+    S.lists.Employees     ? getListItems(S.siteId, S.lists.Employees)     : [],
+    S.lists.LeaveRequests ? getListItems(S.siteId, S.lists.LeaveRequests) : [],
+    S.lists.Roles         ? getListItems(S.siteId, S.lists.Roles)         : [],
+    S.lists.PublicHolidays? getListItems(S.siteId, S.lists.PublicHolidays): [],
+  ]);
+  S.employees = employees;
+  S.leaves     = leaves;
+  S.roles      = roles;
+  S.holidays   = holidays;
+}
+
+async function refreshData() {
+  await loadAllData();
+  renderInPlace();
+}
+
+// ─── UI State helpers ─────────────────────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+  setLoadingMsg(msg);
+}
+function setLoadingMsg(msg) {
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideLoading() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+function showApp() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  render();
+}
+function showError(msg) {
+  alert(msg);
+  document.getElementById('login-screen').style.display = 'flex';
+}
+function showSetupError(missing) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('content').innerHTML = `
+    <div class="error-banner" style="margin-top:40px;flex-direction:column;align-items:flex-start;gap:12px">
+      <div style="font-size:15px;font-weight:700">⚠️ SharePoint Lists Not Found</div>
+      <div>The following SharePoint lists are missing from TeamDocuments:<br><strong>${missing.join(', ')}</strong></div>
+      <div>Please ask your IT admin to complete the setup using the setup guide.</div>
+    </div>`;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function today(){ return new Date().toISOString().split('T')[0]; }
-function uid(){ return Math.random().toString(36).slice(2,9); }
+function today() { return new Date().toISOString().split('T')[0]; }
+function uid()   { return Math.random().toString(36).slice(2,9); }
 
-function isWeekend(ds){
-  const d=new Date(ds); return d.getDay()===0||d.getDay()===6;
+function isWeekend(ds) { const d=new Date(ds); return d.getDay()===0||d.getDay()===6; }
+
+function isHoliday(ds, country) {
+  return S.holidays.some(h => h.HolidayDate?.split('T')[0] === ds && h.Country === country);
 }
 
-function isHoliday(ds,country){
-  const yr=parseInt(ds.slice(0,4));
-  return (PUBLIC_HOLIDAYS[country]?.[yr]||[]).some(h=>h.d===ds);
-}
-
-function calcWorkingDays(start,end,country){
-  if(!start||!end||end<start) return 0;
-  let n=0;
-  const cur=new Date(start), last=new Date(end);
-  while(cur<=last){
+function calcWorkingDays(start, end, country) {
+  if (!start||!end||end<start) return 0;
+  let n=0, cur=new Date(start), last=new Date(end);
+  while(cur<=last) {
     const ds=cur.toISOString().split('T')[0];
-    if(!isWeekend(ds)&&!isHoliday(ds,country)) n++;
+    if (!isWeekend(ds) && !isHoliday(ds,country)) n++;
     cur.setDate(cur.getDate()+1);
   }
   return n;
 }
 
-function proRata(allowance,joinDate,year){
-  const join=new Date(joinDate);
-  if(join.getFullYear()<year) return allowance;
-  if(join.getFullYear()>year) return 0;
-  const yearEnd=new Date(year,11,31);
-  const totalDays=(yearEnd-new Date(year,0,1))/864e5+1;
-  const rem=(yearEnd-join)/864e5+1;
-  return Math.round(rem/totalDays*allowance);
+function proRata(allowance, joinDate, year) {
+  const join = new Date(joinDate);
+  if (join.getFullYear() < year) return allowance;
+  if (join.getFullYear() > year) return 0;
+  const yearEnd = new Date(year,11,31);
+  const total = (yearEnd - new Date(year,0,1))/864e5+1;
+  const rem   = (yearEnd - join)/864e5+1;
+  return Math.round(rem/total*allowance);
 }
 
-function getCarryFwd(emp,year){
-  if(!emp.cfEnabled) return 0;
-  const py=year-1;
-  const pyBase=proRata(emp.allowance,emp.joinDate,py);
-  const pyUsed=state.leaves
-    .filter(l=>l.empId===emp.id&&l.status!=='Rejected'&&new Date(l.start).getFullYear()===py)
-    .reduce((s,l)=>s+(l.days||0),0);
-  return Math.min(Math.max(0,pyBase-pyUsed), emp.cfMax||5);
+function getCarryFwd(emp, year) {
+  if (!emp.CarryForwardEnabled) return 0;
+  const py = year-1;
+  const pyBase = proRata(emp.AnnualAllowance||25, emp.JoinDate, py);
+  const pyUsed = S.leaves
+    .filter(l => l.EmployeeId===String(emp.id) && l.Status!=='Rejected' && new Date(l.StartDate).getFullYear()===py)
+    .reduce((s,l) => s+(parseInt(l.WorkingDays)||0), 0);
+  return Math.min(Math.max(0, pyBase-pyUsed), parseInt(emp.MaxCarryForward)||5);
 }
 
-function getTotalAllowance(emp,year){
-  return proRata(emp.allowance,emp.joinDate,year)+getCarryFwd(emp,year);
+function getTotalAllowance(emp, year) {
+  return proRata(emp.AnnualAllowance||25, emp.JoinDate, year) + getCarryFwd(emp, year);
 }
 
-function getUsedDays(empId,year){
-  return state.leaves
-    .filter(l=>l.empId===empId&&l.status!=='Rejected'&&new Date(l.start).getFullYear()===year)
-    .reduce((s,l)=>s+(l.days||0),0);
+function getUsedDays(empId, year) {
+  return S.leaves
+    .filter(l => l.EmployeeId===String(empId) && l.Status!=='Rejected' && new Date(l.StartDate).getFullYear()===year)
+    .reduce((s,l) => s+(parseInt(l.WorkingDays)||0), 0);
 }
 
-function fmt(ds){
-  if(!ds) return '—';
+function getVisibleLeaves() {
+  // Role-based filtering
+  if (S.role==='Admin' || S.role==='HR') return S.leaves;
+  if (S.role==='Manager') {
+    const myEmpId = S.myEmpRecord?.id;
+    const myTeam  = S.employees.filter(e => e.ManagerId === S.user.id).map(e => String(e.id));
+    return S.leaves.filter(l => l.AzureObjectId===S.user.id || myTeam.includes(l.EmployeeId));
+  }
+  // Employee — own leaves only
+  return S.leaves.filter(l => l.AzureObjectId === S.user.id);
+}
+
+function canApprove() { return S.role==='Admin'||S.role==='HR'||S.role==='Manager'; }
+function canManageEmployees() { return S.role==='Admin'||S.role==='HR'; }
+function isAdmin() { return S.role==='Admin'; }
+
+function fmt(ds) {
+  if (!ds) return '—';
   return new Date(ds).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
 }
-
-function fmtWday(ds){
+function fmtWday(ds) {
   return new Date(ds).toLocaleDateString('en-GB',{weekday:'long'});
 }
-
-function greet(){
+function greet() {
   const h=new Date().getHours();
   return h<12?'morning':h<17?'afternoon':'evening';
 }
 
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-function avHtml(name,country,size=34){
-  const cs=country==='UK'?{bg:'#DBEAFE',text:'#1251A3',acc:'#2563EB'}:{bg:'#FFEDD5',text:'#B34500',acc:'#EA6C00'};
-  const ini=(name||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
-  const r=Math.round(size*0.26);
+function avHtml(name, country, size=34) {
+  const cs = country==='UK'
+    ? {bg:'#DBEAFE',text:'#1251A3',acc:'#2563EB'}
+    : {bg:'#FFEDD5',text:'#B34500',acc:'#EA6C00'};
+  const ini = (name||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  const r = Math.round(size*0.26);
   return `<div class="av" style="width:${size}px;height:${size}px;border-radius:${r}px;font-size:${Math.round(size*.36)}px;background:${cs.bg};color:${cs.text};border:1.5px solid ${cs.acc}44">${ini}</div>`;
 }
 
-function statusBadge(status){
+function statusBadge(status) {
   const map={Approved:'approved',Pending:'pending',Rejected:'rejected'};
   const dot={Approved:'#22C55E',Pending:'#F59E0B',Rejected:'#EF4444'};
   return `<span class="badge badge-${map[status]||'pending'}"><span class="badge-dot" style="background:${dot[status]||dot.Pending}"></span>${status}</span>`;
 }
 
-function countryBadge(country){
-  const cls=country==='UK'?'badge-uk':'badge-india';
-  const flag=country==='UK'?'🇬🇧':'🇮🇳';
-  return `<span class="badge ${cls}">${flag} ${country}</span>`;
+function countryBadge(country) {
+  return `<span class="badge badge-${country==='UK'?'uk':'india'}">${country==='UK'?'🇬🇧':'🇮🇳'} ${country}</span>`;
+}
+
+function roleBadge(role) {
+  const cls={Admin:'role-admin',HR:'role-hr',Manager:'role-manager',Employee:'role-employee'};
+  return `<span class="role-badge ${cls[role]||'role-employee'}">${role||'Employee'}</span>`;
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let toastTimer=null;
-function toast(msg,type='ok'){
+function toast(msg, type='ok') {
   const el=document.getElementById('toast');
   el.className=`toast toast-${type}`;
   el.innerHTML=`${type==='ok'?'✓':'✕'} ${msg}`;
@@ -415,98 +652,217 @@ function toast(msg,type='ok'){
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
-function openModal(html,large=false){
+function openModal(html, large=false) {
   const box=document.getElementById('modal-box');
   box.className='modal'+(large?' modal-lg':'');
   box.innerHTML=html;
   document.getElementById('modal-overlay').style.display='flex';
 }
-function closeModal(){
+function closeModal() {
   document.getElementById('modal-overlay').style.display='none';
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
-function render(){
+function render() {
   updateSidebar();
   updateTopbar();
   updatePills();
+  renderContent();
+}
+
+function renderContent() {
   const el=document.getElementById('content');
   el.innerHTML='';
   const wrap=document.createElement('div');
   wrap.className='tab-content';
   wrap.innerHTML=renderTab();
   el.appendChild(wrap);
-  attachTabEvents();
+  attachGlobalEvents();
 }
 
-function updateSidebar(){
-  const tabs=[
-    {key:'dashboard',label:'Dashboard',icon:'◈'},
-    {key:'employees',label:'Employees',icon:'◉'},
-    {key:'leaves',   label:'Requests', icon:'◎'},
-    {key:'calendar', label:'Calendar', icon:'⬡'},
-    {key:'holidays', label:'Holidays', icon:'◇'},
-    {key:'reports',  label:'Reports',  icon:'◆'},
-  ];
-  document.getElementById('nav').innerHTML=tabs.map(t=>`
-    <button class="nav-btn${state.tab===t.key?' active':''}" data-tab="${t.key}">
-      <span class="nav-icon">${t.icon}</span>
-      <span>${t.label}</span>
+function renderInPlace() {
+  updatePills();
+  renderContent();
+}
+
+function updateSidebar() {
+  const ini = (S.user?.displayName||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('user-av').textContent = ini;
+  document.getElementById('user-name').textContent = S.user?.displayName||'—';
+  document.getElementById('user-role-label').textContent = S.role||'Employee';
+
+  const tabs = [
+    {key:'dashboard', label:'Dashboard', icon:'◈', show: true},
+    {key:'myleave',   label:'My Leave',  icon:'◎', show: true},
+    {key:'team',      label:'Team Leaves',icon:'◉', show: canApprove()},
+    {key:'employees', label:'Employees', icon:'👥', show: canManageEmployees()},
+    {key:'calendar',  label:'Calendar',  icon:'⬡', show: true},
+    {key:'holidays',  label:'Holidays',  icon:'◇', show: true},
+    {key:'reports',   label:'Reports',   icon:'◆', show: canApprove()},
+  ].filter(t => t.show);
+
+  document.getElementById('nav').innerHTML = tabs.map(t=>`
+    <button class="nav-btn${S.tab===t.key?' active':''}" data-tab="${t.key}">
+      <span class="nav-icon">${t.icon}</span><span>${t.label}</span>
     </button>`).join('');
-  document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{state.tab=b.dataset.tab;render();}));
+
+  document.querySelectorAll('.nav-btn').forEach(b=>
+    b.addEventListener('click',()=>{ S.tab=b.dataset.tab; render(); })
+  );
 }
 
-function updateTopbar(){
+function updateTopbar() {
   document.querySelectorAll('.year-btn').forEach(b=>{
-    b.classList.toggle('active',parseInt(b.dataset.year)===state.year);
-    b.onclick=()=>{state.year=parseInt(b.dataset.year);render();};
+    b.classList.toggle('active', parseInt(b.dataset.year)===S.year);
+    b.onclick=()=>{ S.year=parseInt(b.dataset.year); render(); };
   });
+  document.getElementById('btn-apply').style.display = 'inline-flex';
+  document.getElementById('btn-add-emp').style.display = canManageEmployees() ? 'inline-flex' : 'none';
 }
 
-function updatePills(){
-  document.getElementById('pill-uk').textContent=state.employees.filter(e=>e.country==='UK').length;
-  document.getElementById('pill-india').textContent=state.employees.filter(e=>e.country==='India').length;
+function updatePills() {
+  document.getElementById('pill-uk').textContent    = S.employees.filter(e=>e.Country==='UK').length;
+  document.getElementById('pill-india').textContent = S.employees.filter(e=>e.Country==='India').length;
 }
 
-function renderTab(){
-  switch(state.tab){
-    case 'dashboard': return renderDashboard();
-    case 'employees': return renderEmployees();
-    case 'leaves':    return renderLeaves();
-    case 'calendar':  return renderCalendar();
-    case 'holidays':  return renderHolidays();
-    case 'reports':   return renderReports();
-    default:          return renderDashboard();
+function attachGlobalEvents() {
+  document.querySelectorAll('.year-btn').forEach(b=>{
+    b.onclick=()=>{ S.year=parseInt(b.dataset.year); render(); };
+  });
+  document.getElementById('btn-apply').onclick = ()=>openApplyLeave();
+  document.getElementById('btn-add-emp').onclick = ()=>openAddEmployee();
+}
+
+function renderTab() {
+  switch(S.tab) {
+    case 'dashboard':  return renderDashboard();
+    case 'myleave':    return renderMyLeave();
+    case 'team':       return renderTeamLeaves();
+    case 'employees':  return renderEmployees();
+    case 'calendar':   return renderCalendar();
+    case 'holidays':   return renderHolidays();
+    case 'reports':    return renderReports();
+    default:           return renderDashboard();
   }
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function renderDashboard(){
-  const t=today();
-  const pending=state.leaves.filter(l=>l.status==='Pending');
-  const onLeave=state.leaves.filter(l=>l.status==='Approved'&&l.start<=t&&l.end>=t);
-  const yrLeaves=state.leaves.filter(l=>new Date(l.start).getFullYear()===state.year);
+function renderDashboard() {
+  const t = today();
+  const myLeaves    = S.leaves.filter(l => l.AzureObjectId === S.user.id);
+  const myPending   = myLeaves.filter(l => l.Status==='Pending').length;
+  const visLeaves   = getVisibleLeaves();
+  const pendingAll  = visLeaves.filter(l => l.Status==='Pending');
+  const onLeave     = S.leaves.filter(l => l.Status==='Approved' && l.StartDate?.split('T')[0]<=t && l.EndDate?.split('T')[0]>=t);
 
-  const totUsed=co=>state.employees.filter(e=>e.country===co).reduce((s,e)=>s+getUsedDays(e.id,state.year),0);
-  const totAllow=co=>state.employees.filter(e=>e.country===co).reduce((s,e)=>s+getTotalAllowance(e,state.year),0);
+  const emp = S.myEmpRecord;
+  const base= emp ? proRata(emp.AnnualAllowance||25, emp.JoinDate, S.year) : 0;
+  const cf  = emp ? getCarryFwd(emp, S.year) : 0;
+  const tot = base+cf;
+  const used= emp ? getUsedDays(emp.id, S.year) : 0;
+  const rem = Math.max(0, tot-used);
 
-  const onNames=onLeave.slice(0,2).map(l=>{const e=state.employees.find(x=>x.id===l.empId);return e?.name?.split(' ')[0]||'';}).filter(Boolean);
+  let kpis = '';
+  if (S.role==='Employee') {
+    kpis = `
+      <div class="kpi" style="border-top-color:#2563EB">
+        <div class="kpi-icon">📅</div><div class="kpi-val">${rem}d</div>
+        <div class="kpi-label">Leave Remaining</div><div class="kpi-sub">${used}d used of ${tot}d total</div>
+      </div>
+      <div class="kpi" style="border-top-color:#F59E0B">
+        <div class="kpi-icon">⏳</div><div class="kpi-val">${myPending}</div>
+        <div class="kpi-label">My Pending Requests</div><div class="kpi-sub">Awaiting approval</div>
+      </div>
+      <div class="kpi" style="border-top-color:#059669">
+        <div class="kpi-icon">✅</div><div class="kpi-val">${myLeaves.filter(l=>l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).length}</div>
+        <div class="kpi-label">Approved This Year</div><div class="kpi-sub">${S.year}</div>
+      </div>
+      <div class="kpi" style="border-top-color:#7C3AED">
+        <div class="kpi-icon">🏖️</div><div class="kpi-val">${cf}d</div>
+        <div class="kpi-label">Carried Forward</div><div class="kpi-sub">From ${S.year-1}</div>
+      </div>`;
+  } else {
+    const onNames = onLeave.slice(0,2).map(l=>S.employees.find(e=>String(e.id)===l.EmployeeId)?.Title?.split(' ')[0]||'').filter(Boolean);
+    kpis = `
+      <div class="kpi" style="border-top-color:#2563EB">
+        <div class="kpi-icon">👥</div><div class="kpi-val">${S.employees.length}</div>
+        <div class="kpi-label">Employees</div>
+        <div class="kpi-sub">${S.employees.filter(e=>e.Country==='UK').length} UK · ${S.employees.filter(e=>e.Country==='India').length} India</div>
+      </div>
+      <div class="kpi" style="border-top-color:#F59E0B;cursor:pointer" onclick="S.tab='team';render()">
+        <div class="kpi-icon">⏳</div><div class="kpi-val">${pendingAll.length}</div>
+        <div class="kpi-label">Pending Approval</div><div class="kpi-sub">Awaiting action</div>
+      </div>
+      <div class="kpi" style="border-top-color:#7C3AED">
+        <div class="kpi-icon">✈️</div><div class="kpi-val">${onLeave.length}</div>
+        <div class="kpi-label">On Leave Today</div>
+        <div class="kpi-sub">${onLeave.length?onNames.join(', ')+(onLeave.length>2?` +${onLeave.length-2}`:''):'Nobody away'}</div>
+      </div>
+      <div class="kpi" style="border-top-color:#059669">
+        <div class="kpi-icon">📋</div><div class="kpi-val">${visLeaves.filter(l=>new Date(l.StartDate).getFullYear()===S.year).length}</div>
+        <div class="kpi-label">Requests ${S.year}</div>
+        <div class="kpi-sub">${visLeaves.filter(l=>l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).length} approved</div>
+      </div>`;
+  }
 
-  let cRows='';
-  for(const co of ['UK','India']){
+  const recentRows = ([...getVisibleLeaves()]
+    .sort((a,b)=>(b.AppliedOn||'').localeCompare(a.AppliedOn||''))
+    .slice(0,8)
+    .map(l=>{
+      const e=S.employees.find(x=>String(x.id)===l.EmployeeId);
+      return `<tr onclick="openLeaveDetail('${l.id}')" style="cursor:pointer">
+        <td style="display:flex;align-items:center;gap:8px;padding:9px 12px">
+          ${avHtml(e?.Title,e?.Country,28)}
+          <div><div style="font-size:13px;font-weight:600">${e?.Title||'—'}</div>
+          <div style="font-size:10px;color:var(--muted)">${e?.Country==='UK'?'🇬🇧':'🇮🇳'} ${l.LeaveType||''}</div></div>
+        </td>
+        <td style="font-size:12px">${fmt(l.StartDate?.split('T')[0])}</td>
+        <td style="font-size:14px;font-weight:700;color:var(--navy)">${l.WorkingDays||0}d</td>
+        <td>${statusBadge(l.Status)}</td>
+      </tr>`;
+    }).join(''));
+
+  const pendingRows = pendingAll.slice(0,5).map(l=>{
+    const e=S.employees.find(x=>String(x.id)===l.EmployeeId);
+    return `<div onclick="openLeaveDetail('${l.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:9px;align-items:center">
+        ${avHtml(e?.Title,e?.Country)}
+        <div><div style="font-size:13px;font-weight:600">${e?.Title||'—'}</div>
+        <div style="font-size:10px;color:var(--muted)">${l.LeaveType} · ${l.WorkingDays||0}d</div></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--muted)">${fmt(l.StartDate?.split('T')[0])}</div>
+        ${statusBadge(l.Status)}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="page-header">
+    <div>
+      <div class="page-title">Good ${greet()}, ${S.user?.displayName?.split(' ')[0]||'there'}</div>
+      <div class="page-sub">
+        ${roleBadge(S.role)} &nbsp;·&nbsp; ${S.year} overview
+        ${emp?`&nbsp;·&nbsp; ${emp.Country==='UK'?'🇬🇧':'🇮🇳'} ${emp.Country}`:''}
+      </div>
+    </div>
+    ${!emp&&canManageEmployees()?`<div class="info-banner" style="margin:0;font-size:12px">ℹ️ Your Microsoft account isn't linked to an employee record yet. Ask an admin to add you to LS_Employees with your Azure Object ID.</div>`:''}
+  </div>
+  <div class="kpi-grid">${kpis}</div>
+
+  ${S.role!=='Employee'?`<div class="country-row">${['UK','India'].map(co=>{
     const cs=co==='UK'?{flag:'🇬🇧',acc:'var(--uk-acc)',text:'var(--uk-text)'}:{flag:'🇮🇳',acc:'var(--in-acc)',text:'var(--in-text)'};
-    const used=totUsed(co),allow=totAllow(co);
+    const emps=S.employees.filter(e=>e.Country===co);
+    const used=emps.reduce((s,e)=>s+getUsedDays(e.id,S.year),0);
+    const allow=emps.reduce((s,e)=>s+getTotalAllowance(e,S.year),0);
     const pct=allow>0?Math.min(100,Math.round(used/allow*100)):0;
-    const emps=state.employees.filter(e=>e.country===co);
-    const pend=state.leaves.filter(l=>l.status==='Pending'&&emps.some(e=>e.id===l.empId)).length;
-    cRows+=`<div class="country-card">
+    const pend=S.leaves.filter(l=>l.Status==='Pending'&&emps.some(e=>String(e.id)===l.EmployeeId)).length;
+    return `<div class="country-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div style="display:flex;gap:10px;align-items:center">
           <span style="font-size:26px">${cs.flag}</span>
-          <div>
-            <div style="font-size:15px;font-weight:700;color:var(--navy)">${co==='UK'?'United Kingdom':'India'}</div>
-            <div style="font-size:11px;color:var(--muted)">${emps.length} employees · Default ${DEF_ALLOW[co]}d/yr</div>
-          </div>
+          <div><div style="font-size:15px;font-weight:700;color:var(--navy)">${co==='UK'?'United Kingdom':'India'}</div>
+          <div style="font-size:11px;color:var(--muted)">${emps.length} employees · Default ${DEF_ALLOW[co]}d/yr</div></div>
         </div>
         <div style="text-align:right">
           <div style="font-size:10px;color:var(--muted)">Used / Allowed</div>
@@ -520,111 +876,217 @@ function renderDashboard(){
         <span>${pct}% utilised</span><span>${pend} pending</span>
       </div>
     </div>`;
-  }
+  }).join('')}</div>`:''}
 
-  const recentRows=([...state.leaves].sort((a,b)=>(b.applied||'').localeCompare(a.applied||'')).slice(0,8).map(l=>{
-    const emp=state.employees.find(e=>e.id===l.empId);
-    const flag=emp?.country==='UK'?'🇬🇧':'🇮🇳';
-    return `<tr onclick="openLeaveDetail('${l.id}')" style="cursor:pointer">
-      <td>${avHtml(emp?.name,emp?.country,28)}<span style="margin-left:8px;font-size:13px;font-weight:600">${emp?.name||'—'}</span><div style="font-size:10px;color:var(--muted);margin-left:36px">${flag} ${emp?.role||''}</div></td>
-      <td style="color:var(--muted);font-size:11px">${l.type}</td>
-      <td style="font-size:12px">${fmt(l.start)}</td>
-      <td style="font-size:14px;font-weight:700;color:var(--navy)">${l.days}d</td>
-      <td>${statusBadge(l.status)}</td>
-    </tr>`;
-  }).join(''));
-
-  const pendRows=pending.slice(0,5).map(l=>{
-    const emp=state.employees.find(e=>e.id===l.empId);
-    return `<div onclick="openLeaveDetail('${l.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)" class="tbl-row-hover">
-      <div style="display:flex;gap:9px;align-items:center">
-        ${avHtml(emp?.name,emp?.country)}
-        <div>
-          <div style="font-size:13px;font-weight:600">${emp?.name||'—'}</div>
-          <div style="font-size:10px;color:var(--muted)">${l.type} · ${l.days}d</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;color:var(--muted)">${fmt(l.start)}</div>
-        ${statusBadge(l.status)}
-      </div>
-    </div>`;
-  }).join('');
-
-  return `
-  <div class="page-header">
-    <div><div class="page-title">Good ${greet()}</div>
-    <div class="page-sub">Team leave overview · ${state.year}</div></div>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi" style="border-top-color:#2563EB">
-      <div class="kpi-icon">👥</div><div class="kpi-val">${state.employees.length}</div>
-      <div class="kpi-label">Employees</div>
-      <div class="kpi-sub">${state.employees.filter(e=>e.country==='UK').length} UK · ${state.employees.filter(e=>e.country==='India').length} India</div>
-    </div>
-    <div class="kpi" style="border-top-color:#F59E0B;cursor:pointer" onclick="state.tab='leaves';render()">
-      <div class="kpi-icon">⏳</div><div class="kpi-val">${pending.length}</div>
-      <div class="kpi-label">Pending Approval</div><div class="kpi-sub">Awaiting action</div>
-    </div>
-    <div class="kpi" style="border-top-color:#7C3AED">
-      <div class="kpi-icon">✈️</div><div class="kpi-val">${onLeave.length}</div>
-      <div class="kpi-label">On Leave Today</div>
-      <div class="kpi-sub">${onLeave.length?onNames.join(', ')+(onLeave.length>2?` +${onLeave.length-2}`:''):'Nobody away'}</div>
-    </div>
-    <div class="kpi" style="border-top-color:#059669">
-      <div class="kpi-icon">📋</div><div class="kpi-val">${yrLeaves.length}</div>
-      <div class="kpi-label">Requests ${state.year}</div>
-      <div class="kpi-sub">${yrLeaves.filter(l=>l.status==='Approved').length} approved</div>
-    </div>
-  </div>
-  <div class="country-row">${cRows}</div>
   <div class="section-two">
     <div class="card">
-      <div class="card-header"><div class="card-title">Pending Requests</div><span class="link" onclick="state.tab='leaves';render()">View all →</span></div>
-      ${pending.length===0?'<div style="padding:32px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:6px">📭</div>No pending requests</div>':pendRows}
+      <div class="card-header">
+        <div class="card-title">${canApprove()?'Pending Requests':'My Recent Requests'}</div>
+        <span class="link" onclick="S.tab='${canApprove()?'team':'myleave'}';render()">View all →</span>
+      </div>
+      ${pendingAll.length===0&&canApprove()||(!canApprove()&&getVisibleLeaves().length===0)
+        ?'<div style="padding:32px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:6px">📭</div>Nothing here yet</div>'
+        :canApprove()?pendingRows
+        :getVisibleLeaves().slice(0,5).map(l=>`<div onclick="openLeaveDetail('${l.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:13px;font-weight:600">${l.LeaveType}</div>
+          <div style="font-size:10px;color:var(--muted)">${fmt(l.StartDate?.split('T')[0])} – ${fmt(l.EndDate?.split('T')[0])}</div></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:var(--navy)">${l.WorkingDays||0}d</span>${statusBadge(l.Status)}</div>
+        </div>`).join('')}
     </div>
     <div class="card">
-      <div class="card-header"><div class="card-title">Recent Activity</div><span class="link" onclick="state.tab='leaves';render()">View all →</span></div>
-      <table class="tbl tbl-click"><thead><tr><th>Employee</th><th>Type</th><th>Start</th><th>Days</th><th>Status</th></tr></thead>
-      <tbody>${recentRows}</tbody></table>
+      <div class="card-header"><div class="card-title">Recent Activity</div></div>
+      <table class="tbl tbl-click"><thead><tr><th>Employee</th><th>Start</th><th>Days</th><th>Status</th></tr></thead>
+      <tbody>${recentRows||'<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">No activity yet</td></tr>'}</tbody></table>
     </div>
   </div>`;
 }
 
+// ─── MY LEAVE ────────────────────────────────────────────────────────────────
+function renderMyLeave() {
+  const emp = S.myEmpRecord;
+  const myLeaves = S.leaves.filter(l => l.AzureObjectId===S.user.id)
+    .sort((a,b)=>(b.AppliedOn||'').localeCompare(a.AppliedOn||''));
+
+  if (!emp) {
+    return `<div class="page-header"><div><div class="page-title">My Leave</div></div></div>
+    <div class="error-banner">⚠️ Your Microsoft account is not linked to an employee record. Please ask your HR or Admin to add you to the system with your Azure Object ID: <strong>${S.user.id}</strong></div>`;
+  }
+
+  const base=proRata(emp.AnnualAllowance||25, emp.JoinDate, S.year);
+  const cf=getCarryFwd(emp, S.year);
+  const tot=base+cf;
+  const used=getUsedDays(emp.id, S.year);
+  const pend=myLeaves.filter(l=>l.Status==='Pending'&&new Date(l.StartDate).getFullYear()===S.year).reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
+  const rem=Math.max(0,tot-used-pend);
+  const pct=tot>0?Math.min(100,Math.round(used/tot*100)):0;
+  const cs=emp.Country==='UK'?{acc:'var(--uk-acc)',flag:'🇬🇧'}:{acc:'var(--in-acc)',flag:'🇮🇳'};
+  const isNew=new Date(emp.JoinDate).getFullYear()===S.year&&new Date(emp.JoinDate)>new Date(S.year,0,1);
+
+  return `
+  <div class="page-header">
+    <div><div class="page-title">My Leave</div>
+    <div class="page-sub">${cs.flag} ${emp.Country} · ${emp.Title} · ${S.year}</div></div>
+    <button class="btn-primary btn-sm" onclick="openApplyLeave()">+ Apply for Leave</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:22px">
+    <div class="card" style="padding:18px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">Leave Balance · ${S.year}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div class="mini"><div class="mini-val">${base}d</div><div class="mini-lbl">Base</div></div>
+        <div class="mini"><div class="mini-val" style="color:${cf>0?'#15803D':'var(--muted)'}">${cf>0?'+'+cf+'d':'—'}</div><div class="mini-lbl">Carry Fwd</div></div>
+        <div class="mini"><div class="mini-val" style="font-weight:700">${tot}d</div><div class="mini-lbl">Total</div></div>
+        <div class="mini"><div class="mini-val">${used}d</div><div class="mini-lbl">Used</div></div>
+      </div>
+      <div class="progress-track" style="margin-bottom:8px">
+        <div class="progress-fill" style="width:${pct}%;background:${pct>85?'#EF4444':cs.acc}"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+        <span>${pct}% used${isNew?' · Pro-rata':''}</span>
+        <span style="font-weight:700;color:${rem<3?'#EF4444':rem<6?'#D97706':'#15803D'}">${rem}d remaining</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:18px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">This Year at a Glance</div>
+      ${[['Approved',myLeaves.filter(l=>l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0)+'d'],
+         ['Pending',pend>0?pend+'d':'None'],
+         ['Sick Days',myLeaves.filter(l=>l.LeaveType==='Sick Leave'&&l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0)+'d'],
+         ['Requests',myLeaves.filter(l=>new Date(l.StartDate).getFullYear()===S.year).length+' total'],
+        ].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12.5px;color:var(--muted)">${l}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--navy)">${v}</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="card" style="padding:18px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">Upcoming Public Holidays</div>
+      ${S.holidays.filter(h=>h.Country===emp.Country&&h.HolidayDate?.split('T')[0]>=today()).slice(0,4).map(h=>`
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--navy)">${h.Title}</span>
+          <span style="font-size:11px;color:var(--muted)">${fmt(h.HolidayDate?.split('T')[0])}</span>
+        </div>`).join('')||'<div style="color:var(--muted);font-size:12px;padding:8px 0">No upcoming holidays found</div>'}
+    </div>
+  </div>
+
+  <div class="card" style="overflow:hidden">
+    <div class="card-header"><div class="card-title">My Leave History</div></div>
+    ${myLeaves.length===0?'<div style="padding:40px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:6px">📭</div>No leave requests yet</div>':`
+    <table class="tbl tbl-click"><thead><tr>
+      <th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Applied</th><th>Status</th><th></th>
+    </tr></thead><tbody>
+    ${myLeaves.map(l=>`<tr onclick="openLeaveDetail('${l.id}')">
+      <td style="font-size:13px;font-weight:500">${l.LeaveType}</td>
+      <td style="font-size:12px">${fmt(l.StartDate?.split('T')[0])}</td>
+      <td style="font-size:12px">${fmt(l.EndDate?.split('T')[0])}</td>
+      <td style="font-size:14px;font-weight:700;color:var(--navy)">${l.WorkingDays||0}d</td>
+      <td style="font-size:11px;color:var(--muted)">${fmt(l.AppliedOn?.split('T')[0])}</td>
+      <td>${statusBadge(l.Status)}</td>
+      <td style="color:var(--muted)">›</td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div>`;
+}
+
+// ─── TEAM LEAVES ─────────────────────────────────────────────────────────────
+function renderTeamLeaves() {
+  const vis = getVisibleLeaves().filter(l=>{
+    const e=S.employees.find(x=>String(x.id)===l.EmployeeId);
+    return (S.leavesStatus==='All'||l.Status===S.leavesStatus)
+      &&(S.leavesCountry==='All'||e?.Country===S.leavesCountry)
+      &&(S.leavesType==='All'||l.LeaveType===S.leavesType)
+      &&(S.leavesSearch===''||e?.Title?.toLowerCase().includes(S.leavesSearch.toLowerCase()));
+  }).sort((a,b)=>(b.AppliedOn||'').localeCompare(a.AppliedOn||''));
+
+  const all=getVisibleLeaves();
+  const counts={All:all.length,Pending:all.filter(l=>l.Status==='Pending').length,
+    Approved:all.filter(l=>l.Status==='Approved').length,Rejected:all.filter(l=>l.Status==='Rejected').length};
+
+  const rows = vis.map(l=>{
+    const e=S.employees.find(x=>String(x.id)===l.EmployeeId);
+    return `<tr onclick="openLeaveDetail('${l.id}')" style="cursor:pointer">
+      <td>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${avHtml(e?.Title,e?.Country,28)}
+          <div><div style="font-size:13px;font-weight:600">${e?.Title||'—'}</div>
+          <div style="font-size:10px;color:var(--muted)">${e?.Country==='UK'?'🇬🇧':'🇮🇳'} ${e?.Role||''}</div></div>
+        </div>
+      </td>
+      <td style="font-size:11px;color:var(--muted)">${l.LeaveType}</td>
+      <td style="font-size:12px">${fmt(l.StartDate?.split('T')[0])}</td>
+      <td style="font-size:12px">${fmt(l.EndDate?.split('T')[0])}</td>
+      <td style="font-size:14px;font-weight:700;color:var(--navy)">${l.WorkingDays||0}d</td>
+      <td style="font-size:11px;color:var(--muted)">${fmt(l.AppliedOn?.split('T')[0])}</td>
+      <td>${statusBadge(l.Status)}</td>
+      <td style="color:var(--muted)">›</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="page-header">
+    <div><div class="page-title">Team Leave Requests</div>
+    <div class="page-sub">${counts.Pending} pending approval</div></div>
+    <button class="btn-primary btn-sm" onclick="openApplyLeave()">+ Apply Leave</button>
+  </div>
+  <div class="filters">
+    <input class="inp inp-sm" value="${S.leavesSearch}" placeholder="Search employee…" style="width:160px" oninput="S.leavesSearch=this.value;renderInPlace()">
+    <div class="seg">
+      ${['All','Pending','Approved','Rejected'].map(st=>`<button class="seg-btn${S.leavesStatus===st?' active':''}" onclick="S.leavesStatus='${st}';renderInPlace()">
+        ${st}<span style="margin-left:4px;font-size:9.5px;color:var(--muted)">${counts[st]}</span></button>`).join('')}
+    </div>
+    <select class="inp inp-sm" style="width:auto" onchange="S.leavesCountry=this.value;renderInPlace()">
+      <option value="All">All Countries</option><option value="UK">🇬🇧 UK</option><option value="India">🇮🇳 India</option>
+    </select>
+    <select class="inp inp-sm" style="width:auto" onchange="S.leavesType=this.value;renderInPlace()">
+      <option value="All">All Types</option>
+      ${LEAVE_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}
+    </select>
+    <button class="btn-ghost btn-sm" onclick="refreshData()" style="margin-left:auto">↻ Refresh</button>
+  </div>
+  <div class="card" style="overflow:hidden">
+    ${vis.length===0
+      ?'<div style="padding:40px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:6px">📭</div>No requests match your filters</div>'
+      :`<table class="tbl tbl-click"><thead><tr>
+        <th>Employee</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Applied</th><th>Status</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table>`}
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:right">${vis.length} record${vis.length!==1?'s':''}</div>`;
+}
+
 // ─── EMPLOYEES ────────────────────────────────────────────────────────────────
-function renderEmployees(){
-  const filtered=state.employees.filter(e=>
-    (state.empCountry==='All'||e.country===state.empCountry)&&
-    e.name.toLowerCase().includes(state.empSearch.toLowerCase())
+function renderEmployees() {
+  const filtered = S.employees.filter(e=>
+    (S.empCountry==='All'||e.Country===S.empCountry)&&
+    (e.Title||'').toLowerCase().includes(S.empSearch.toLowerCase())
   );
 
-  const cards=filtered.map(emp=>{
-    const base=proRata(emp.allowance,emp.joinDate,state.year);
-    const cf=getCarryFwd(emp,state.year);
+  const cards = filtered.map(emp=>{
+    const base=proRata(emp.AnnualAllowance||25,emp.JoinDate,S.year);
+    const cf=getCarryFwd(emp,S.year);
     const tot=base+cf;
-    const used=getUsedDays(emp.id,state.year);
-    const pend=state.leaves.filter(l=>l.empId===emp.id&&l.status==='Pending').reduce((s,l)=>s+(l.days||0),0);
+    const used=getUsedDays(emp.id,S.year);
+    const pend=S.leaves.filter(l=>l.EmployeeId===String(emp.id)&&l.Status==='Pending').reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
     const rem=Math.max(0,tot-used-pend);
     const pct=tot>0?Math.min(100,Math.round(used/tot*100)):0;
-    const barColor=pct>85?'#EF4444':emp.country==='UK'?'var(--uk-acc)':'var(--in-acc)';
-    const isNew=new Date(emp.joinDate).getFullYear()===state.year&&new Date(emp.joinDate)>new Date(state.year,0,1);
+    const barColor=pct>85?'#EF4444':emp.Country==='UK'?'var(--uk-acc)':'var(--in-acc)';
+    const empRole=S.roles.find(r=>r.AzureObjectId===emp.AzureObjectId);
+    const isNew=emp.JoinDate&&new Date(emp.JoinDate).getFullYear()===S.year&&new Date(emp.JoinDate)>new Date(S.year,0,1);
     return `<div class="emp-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div style="display:flex;gap:9px;align-items:center">
-          ${avHtml(emp.name,emp.country,40)}
-          <div>
-            <div style="font-weight:700;font-size:13.5px;color:var(--navy)">${emp.name}</div>
-            <div style="font-size:10.5px;color:var(--muted)">${emp.role}</div>
-          </div>
+          ${avHtml(emp.Title,emp.Country,40)}
+          <div><div style="font-weight:700;font-size:13.5px;color:var(--navy)">${emp.Title}</div>
+          <div style="font-size:10.5px;color:var(--muted)">${emp.Role||''}</div></div>
         </div>
-        ${countryBadge(emp.country)}
+        ${countryBadge(emp.Country)}
       </div>
-      <div class="mini-grid grid-3" style="margin-bottom:8px">
+      ${empRole?`<div style="margin-bottom:10px">${roleBadge(empRole.Role)}</div>`:''}
+      <div class="mini-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">
         <div class="mini"><div class="mini-val">${base}d</div><div class="mini-lbl">Base</div></div>
         <div class="mini"><div class="mini-val" style="color:${cf>0?'#15803D':'var(--muted)'}">${cf>0?'+'+cf+'d':'—'}</div><div class="mini-lbl">Carry Fwd</div></div>
         <div class="mini"><div class="mini-val" style="font-weight:700">${tot}d</div><div class="mini-lbl">Total</div></div>
       </div>
-      <div class="mini-grid grid-3" style="margin-bottom:9px">
+      <div class="mini-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:9px">
         <div class="mini"><div class="mini-val">${used}d</div><div class="mini-lbl">Used</div></div>
         <div class="mini"><div class="mini-val" style="color:${pend>0?'#D97706':'var(--muted)'}">${pend>0?pend+'d':'—'}</div><div class="mini-lbl">Pending</div></div>
         <div class="mini"><div class="mini-val" style="color:${rem<3?'#EF4444':rem<6?'#D97706':'var(--navy)'}">${rem}d</div><div class="mini-lbl">Remaining</div></div>
@@ -634,123 +1096,59 @@ function renderEmployees(){
       </div>
       <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);margin-bottom:12px">
         <span>${pct}% used${isNew?' · Pro-rata':''}</span>
-        <span>${emp.cfEnabled?'CF max: '+emp.cfMax+'d':'No carry fwd'}</span>
+        <span>${emp.CarryForwardEnabled?'CF max: '+(emp.MaxCarryForward||5)+'d':'No carry fwd'}</span>
       </div>
-      <button class="btn-ghost btn-sm btn-danger" onclick="removeEmployee('${emp.id}')" style="width:100%">Remove</button>
+      ${isAdmin()?`<button class="btn-ghost btn-sm btn-danger" onclick="removeEmployee('${emp.id}')" style="width:100%">Remove</button>`:''}
     </div>`;
   }).join('');
 
   return `
   <div class="page-header">
-    <div><div class="page-title">Employees</div><div class="page-sub">${state.employees.length} team members</div></div>
-    <button class="btn-primary btn-sm" onclick="openAddEmployee()">+ Add Employee</button>
+    <div><div class="page-title">Employees</div><div class="page-sub">${S.employees.length} team members</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost btn-sm" onclick="refreshData()">↻ Refresh</button>
+      ${canManageEmployees()?`<button class="btn-primary btn-sm" onclick="openAddEmployee()">+ Add Employee</button>`:''}
+    </div>
   </div>
   <div class="filters">
-    <input class="inp inp-sm" id="emp-search" value="${state.empSearch}" placeholder="Search employees…" style="width:180px" oninput="state.empSearch=this.value;renderInPlace()">
+    <input class="inp inp-sm" value="${S.empSearch}" placeholder="Search…" style="width:180px" oninput="S.empSearch=this.value;renderInPlace()">
     <div class="seg">
-      ${['All','UK','India'].map(o=>`<button class="seg-btn${state.empCountry===o?' active':''}" onclick="state.empCountry='${o}';renderInPlace()">${o}</button>`).join('')}
+      ${['All','UK','India'].map(o=>`<button class="seg-btn${S.empCountry===o?' active':''}" onclick="S.empCountry='${o}';renderInPlace()">${o}</button>`).join('')}
     </div>
   </div>
   <div class="emp-grid">${cards||'<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">No employees found</div>'}</div>`;
 }
 
-// ─── LEAVES ───────────────────────────────────────────────────────────────────
-function renderLeaves(){
-  const filtered=state.leaves.filter(l=>{
-    const emp=state.employees.find(e=>e.id===l.empId);
-    return (state.leavesStatus==='All'||l.status===state.leavesStatus)
-      &&(state.leavesCountry==='All'||emp?.country===state.leavesCountry)
-      &&(state.leavesType==='All'||l.type===state.leavesType)
-      &&(state.leavesSearch===''||emp?.name?.toLowerCase().includes(state.leavesSearch.toLowerCase()));
-  }).sort((a,b)=>(b.applied||'').localeCompare(a.applied||''));
-
-  const counts={All:state.leaves.length,Pending:state.leaves.filter(l=>l.status==='Pending').length,
-    Approved:state.leaves.filter(l=>l.status==='Approved').length,Rejected:state.leaves.filter(l=>l.status==='Rejected').length};
-
-  const rows=filtered.map(l=>{
-    const emp=state.employees.find(e=>e.id===l.empId);
-    const flag=emp?.country==='UK'?'🇬🇧':'🇮🇳';
-    return `<tr onclick="openLeaveDetail('${l.id}')" style="cursor:pointer">
-      <td>
-        <div style="display:flex;gap:8px;align-items:center">
-          ${avHtml(emp?.name,emp?.country,28)}
-          <div>
-            <div style="font-size:13px;font-weight:600">${emp?.name||'—'}</div>
-            <div style="font-size:10px;color:var(--muted)">${flag} ${emp?.role||''}</div>
-          </div>
-        </div>
-      </td>
-      <td style="font-size:11px;color:var(--muted)">${l.type}</td>
-      <td style="font-size:12px">${fmt(l.start)}</td>
-      <td style="font-size:12px">${fmt(l.end)}</td>
-      <td style="font-size:14px;font-weight:700;color:var(--navy)">${l.days}d</td>
-      <td style="font-size:11px;color:var(--muted)">${fmt(l.applied)}</td>
-      <td>${statusBadge(l.status)}</td>
-      <td style="color:var(--muted)">›</td>
-    </tr>`;
-  }).join('');
-
-  return `
-  <div class="page-header">
-    <div><div class="page-title">Leave Requests</div><div class="page-sub">${counts.Pending} pending approval</div></div>
-    <button class="btn-primary btn-sm" onclick="openApplyLeave()">+ Apply Leave</button>
-  </div>
-  <div class="filters">
-    <input class="inp inp-sm" id="lv-search" value="${state.leavesSearch}" placeholder="Search employee…" style="width:160px" oninput="state.leavesSearch=this.value;renderInPlace()">
-    <div class="seg">
-      ${['All','Pending','Approved','Rejected'].map(s=>`<button class="seg-btn${state.leavesStatus===s?' active':''}" onclick="state.leavesStatus='${s}';renderInPlace()">
-        ${s}${s!=='All'?`<span style="margin-left:4px;font-size:9.5px;background:${state.leavesStatus===s?'var(--subtle)':'transparent'};padding:1px 4px;border-radius:7px;color:var(--muted)">${counts[s]}</span>`:''}</button>`).join('')}
-    </div>
-    <select class="inp inp-sm" style="width:auto" onchange="state.leavesCountry=this.value;renderInPlace()">
-      <option value="All"${state.leavesCountry==='All'?' selected':''}>All Countries</option>
-      <option value="UK"${state.leavesCountry==='UK'?' selected':''}>🇬🇧 UK</option>
-      <option value="India"${state.leavesCountry==='India'?' selected':''}>🇮🇳 India</option>
-    </select>
-    <select class="inp inp-sm" style="width:auto" onchange="state.leavesType=this.value;renderInPlace()">
-      <option value="All"${state.leavesType==='All'?' selected':''}>All Types</option>
-      ${LEAVE_TYPES.map(t=>`<option value="${t}"${state.leavesType===t?' selected':''}>${t}</option>`).join('')}
-    </select>
-  </div>
-  <div class="card" style="overflow:hidden">
-    ${filtered.length===0
-      ?'<div style="padding:40px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:6px">📭</div>No requests match your filters</div>'
-      :`<table class="tbl tbl-click"><thead><tr>
-          <th>Employee</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Applied</th><th>Status</th><th></th>
-        </tr></thead><tbody>${rows}</tbody></table>`
-    }
-  </div>
-  <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:right">${filtered.length} record${filtered.length!==1?'s':''}</div>`;
-}
-
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
-function renderCalendar(){
-  const vm=state.calMonth, vy=state.calYear;
+function renderCalendar() {
+  const vm=S.calMonth, vy=S.calYear;
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const dim=new Date(vy,vm+1,0).getDate();
   const blanks=(new Date(vy,vm,1).getDay()+6)%7;
   const n=new Date();
-  const isToday=(d)=>d===n.getDate()&&vm===n.getMonth()&&vy===n.getFullYear();
 
   const ds=d=>`${vy}-${String(vm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const isToday=d=>d===n.getDate()&&vm===n.getMonth()&&vy===n.getFullYear();
+
+  const approvedLeaves = S.leaves.filter(l=>l.Status==='Approved');
 
   let cells='';
   for(let i=0;i<blanks;i++) cells+=`<div class="cal-blank"></div>`;
   for(let d=1;d<=dim;d++){
     const s=ds(d);
     const wk=isWeekend(s);
-    const ukH=(PUBLIC_HOLIDAYS.UK[vy]||[]).find(h=>h.d===s);
-    const inH=(PUBLIC_HOLIDAYS.India[vy]||[]).find(h=>h.d===s);
-    const ll=state.leaves.filter(l=>l.status==='Approved'&&l.start<=s&&l.end>=s);
-    const todayCls=isToday(d)?'cal-today':'';
-    cells+=`<div class="cal-day${wk?' weekend':''} ${todayCls}">
+    const ukH=S.holidays.find(h=>h.Country==='UK'&&h.HolidayDate?.split('T')[0]===s);
+    const inH=S.holidays.find(h=>h.Country==='India'&&h.HolidayDate?.split('T')[0]===s);
+    const ll=approvedLeaves.filter(l=>l.StartDate?.split('T')[0]<=s&&l.EndDate?.split('T')[0]>=s);
+    cells+=`<div class="cal-day${wk?' weekend':''} ${isToday(d)?'cal-today':''}">
       <div class="cal-num" style="color:${wk?'#CBD5E1':'var(--text)'}">${d}</div>
-      ${ukH?`<div class="cal-tag" style="background:var(--uk-bg);color:var(--uk-text)">🇬🇧 ${ukH.n}</div>`:''}
-      ${inH?`<div class="cal-tag" style="background:var(--in-bg);color:var(--in-text)">🇮🇳 ${inH.n}</div>`:''}
+      ${ukH?`<div class="cal-tag" style="background:var(--uk-bg);color:var(--uk-text)">🇬🇧 ${ukH.Title}</div>`:''}
+      ${inH?`<div class="cal-tag" style="background:var(--in-bg);color:var(--in-text)">🇮🇳 ${inH.Title}</div>`:''}
       ${ll.slice(0,2).map(l=>{
-        const emp=state.employees.find(e=>e.id===l.empId);
-        const co=emp?.country==='UK';
-        return `<div class="cal-tag" style="background:${co?'var(--uk-bg)':'var(--in-bg)'};color:${co?'var(--uk-text)':'var(--in-text)'}">${co?'🇬🇧':'🇮🇳'} ${emp?.name?.split(' ')[0]||''}</div>`;
+        const e=S.employees.find(x=>String(x.id)===l.EmployeeId);
+        const co=e?.Country==='UK';
+        return `<div class="cal-tag" style="background:${co?'var(--uk-bg)':'var(--in-bg)'};color:${co?'var(--uk-text)':'var(--in-text)'}">${co?'🇬🇧':'🇮🇳'} ${e?.Title?.split(' ')[0]||''}</div>`;
       }).join('')}
       ${ll.length>2?`<div style="font-size:7.5px;color:var(--muted)">+${ll.length-2}</div>`:''}
     </div>`;
@@ -770,50 +1168,47 @@ function renderCalendar(){
   </div>
   <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap">
     ${[{bg:'var(--uk-bg)',c:'var(--uk-text)',l:'🇬🇧 UK on leave'},{bg:'var(--in-bg)',c:'var(--in-text)',l:'🇮🇳 India on leave'},
-       {bg:'var(--uk-bg)',c:'var(--uk-text)',l:'🇬🇧 UK public holiday'},{bg:'var(--in-bg)',c:'var(--in-text)',l:'🇮🇳 India public holiday'}]
+       {bg:'var(--uk-bg)',c:'var(--uk-text)',l:'🇬🇧 UK holiday'},{bg:'var(--in-bg)',c:'var(--in-text)',l:'🇮🇳 India holiday'}]
     .map(x=>`<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)">
       <div style="width:10px;height:10px;background:${x.bg};border:1px solid ${x.c}44;border-radius:2px"></div>${x.l}</div>`).join('')}
   </div>`;
 }
 
-function calNav(dir){
-  state.calMonth+=dir;
-  if(state.calMonth<0){state.calMonth=11;state.calYear--;}
-  if(state.calMonth>11){state.calMonth=0;state.calYear++;}
+function calNav(dir) {
+  S.calMonth+=dir;
+  if(S.calMonth<0){S.calMonth=11;S.calYear--;}
+  if(S.calMonth>11){S.calMonth=0;S.calYear++;}
   renderInPlace();
 }
 
 // ─── HOLIDAYS ────────────────────────────────────────────────────────────────
-function renderHolidays(){
-  if(!state.holYear) state.holYear=state.year;
-  const yr=state.holYear;
+function renderHolidays() {
+  if(!S.holYear) S.holYear=S.year;
+  const yr=S.holYear;
 
   const col=(co,cs)=>{
-    const hols=PUBLIC_HOLIDAYS[co][yr]||[];
+    const hols=S.holidays.filter(h=>h.Country===co&&parseInt(h.Year)===yr).sort((a,b)=>a.HolidayDate?.localeCompare(b.HolidayDate));
     return `<div class="card" style="overflow:hidden">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:${cs.bg};display:flex;align-items:center;gap:9px">
         <span style="font-size:20px">${cs.flag}</span>
-        <div>
-          <div style="font-weight:700;color:${cs.text};font-size:14px">${co==='UK'?'United Kingdom':'India'}</div>
-          <div style="font-size:10.5px;color:${cs.text}99">${hols.length} statutory holidays</div>
-        </div>
+        <div><div style="font-weight:700;color:${cs.text};font-size:14px">${co==='UK'?'United Kingdom':'India'}</div>
+        <div style="font-size:10.5px;color:${cs.text}99">${hols.length} statutory holidays · ${yr}</div></div>
       </div>
-      ${hols.length===0?'<div style="padding:30px;text-align:center;color:var(--muted)">No data for this year</div>':
-        hols.map((h,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;${i<hols.length-1?'border-bottom:1px solid var(--border)':''}">
-          <div>
-            <div style="font-size:13px;font-weight:500;color:var(--navy)">${h.n}</div>
-            <div style="font-size:10.5px;color:var(--muted)">${fmtWday(h.d)}</div>
-          </div>
-          <div style="font-size:12px;font-weight:600;color:var(--muted)">${fmt(h.d)}</div>
+      ${hols.length===0
+        ?'<div style="padding:30px;text-align:center;color:var(--muted)">No holidays loaded for this year.<br><small>Admin: add entries to LS_PublicHolidays list.</small></div>'
+        :hols.map((h,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;${i<hols.length-1?'border-bottom:1px solid var(--border)':''}">
+          <div><div style="font-size:13px;font-weight:500;color:var(--navy)">${h.Title}</div>
+          <div style="font-size:10.5px;color:var(--muted)">${fmtWday(h.HolidayDate?.split('T')[0])}</div></div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted)">${fmt(h.HolidayDate?.split('T')[0])}</div>
         </div>`).join('')}
     </div>`;
   };
 
   return `
   <div class="page-header">
-    <div><div class="page-title">Public Holidays</div><div class="page-sub">Statutory holidays · ${yr}</div></div>
+    <div><div class="page-title">Public Holidays</div><div class="page-sub">Loaded from LS_PublicHolidays SharePoint list</div></div>
     <div class="seg">
-      ${[2024,2025,2026].map(y=>`<button class="seg-btn${state.holYear===y?' active':''}" onclick="state.holYear=${y};renderInPlace()">${y}</button>`).join('')}
+      ${[2024,2025,2026].map(y=>`<button class="seg-btn${S.holYear===y?' active':''}" onclick="S.holYear=${y};renderInPlace()">${y}</button>`).join('')}
     </div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
@@ -823,15 +1218,15 @@ function renderHolidays(){
 }
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
-function renderReports(){
-  const rows=state.employees.map(emp=>{
-    const base=proRata(emp.allowance,emp.joinDate,state.year);
-    const cf=getCarryFwd(emp,state.year);
+function renderReports() {
+  const rows = S.employees.map(emp=>{
+    const base=proRata(emp.AnnualAllowance||25,emp.JoinDate,S.year);
+    const cf=getCarryFwd(emp,S.year);
     const tot=base+cf;
-    const used=getUsedDays(emp.id,state.year);
-    const pend=state.leaves.filter(l=>l.empId===emp.id&&l.status==='Pending').reduce((s,l)=>s+(l.days||0),0);
+    const used=getUsedDays(emp.id,S.year);
+    const pend=S.leaves.filter(l=>l.EmployeeId===String(emp.id)&&l.Status==='Pending').reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
     const rem=Math.max(0,tot-used-pend);
-    const sick=state.leaves.filter(l=>l.empId===emp.id&&l.type==='Sick Leave'&&l.status==='Approved'&&new Date(l.start).getFullYear()===state.year).reduce((s,l)=>s+(l.days||0),0);
+    const sick=S.leaves.filter(l=>l.EmployeeId===String(emp.id)&&l.LeaveType==='Sick Leave'&&l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
     return{...emp,base,cf,tot,used,pend,rem,sick};
   });
 
@@ -843,17 +1238,17 @@ function renderReports(){
   };
 
   let viewHtml='';
-  if(state.reportView==='summary'){
+  if(S.reportView==='summary'){
     viewHtml=`<div class="card" style="overflow:hidden">
       <table class="tbl"><thead><tr>
         <th>Employee</th><th>Country</th><th>Base</th><th>Carry Fwd</th><th>Total</th><th>Used</th><th>Pending</th><th>Remaining</th><th>Sick</th><th>Usage</th>
       </tr></thead><tbody>
       ${rows.map(r=>{
         const pct=r.tot>0?Math.round(r.used/r.tot*100):0;
-        const barColor=pct>85?'#EF4444':r.country==='UK'?'var(--uk-acc)':'var(--in-acc)';
+        const barColor=pct>85?'#EF4444':r.Country==='UK'?'var(--uk-acc)':'var(--in-acc)';
         return `<tr>
-          <td><div style="font-size:13px;font-weight:600;color:var(--navy)">${r.name}</div><div style="font-size:10px;color:var(--muted)">${r.role}</div></td>
-          <td>${countryBadge(r.country)}</td>
+          <td><div style="font-size:13px;font-weight:600;color:var(--navy)">${r.Title}</div><div style="font-size:10px;color:var(--muted)">${r.Role||''}</div></td>
+          <td>${countryBadge(r.Country)}</td>
           <td style="font-size:12px">${r.base}d</td>
           <td style="font-size:12px;color:${r.cf>0?'#15803D':'var(--muted)'}">${r.cf>0?'+'+r.cf+'d':'—'}</td>
           <td style="font-size:12px;font-weight:700">${r.tot}d</td>
@@ -871,11 +1266,11 @@ function renderReports(){
       }).join('')}
       </tbody></table>
     </div>`;
-  } else if(state.reportView==='country'){
+  } else if(S.reportView==='country'){
     viewHtml=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
     ${['UK','India'].map(co=>{
       const cs=co==='UK'?{flag:'🇬🇧',bg:'var(--uk-bg)',text:'var(--uk-text)',acc:'var(--uk-acc)'}:{flag:'🇮🇳',bg:'var(--in-bg)',text:'var(--in-text)',acc:'var(--in-acc)'};
-      const gr=rows.filter(r=>r.country===co);
+      const gr=rows.filter(r=>r.Country===co);
       return `<div class="card" style="overflow:hidden">
         <div style="padding:12px 16px;background:${cs.bg};border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
           <span style="font-size:20px">${cs.flag}</span>
@@ -896,7 +1291,7 @@ function renderReports(){
             const pct=r.tot>0?Math.round(r.used/r.tot*100):0;
             return `<div style="margin-bottom:9px">
               <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
-                <span style="font-weight:500">${r.name}</span>
+                <span style="font-weight:500">${r.Title}</span>
                 <span style="color:var(--muted)">${r.used}d / ${r.tot}d (${pct}%)</span>
               </div>
               <div class="progress-track" style="height:5px">
@@ -909,15 +1304,15 @@ function renderReports(){
     }).join('')}
     </div>`;
   } else {
-    const yrL=state.leaves.filter(l=>new Date(l.start).getFullYear()===state.year&&l.status!=='Rejected');
+    const yrL=S.leaves.filter(l=>new Date(l.StartDate).getFullYear()===S.year&&l.Status!=='Rejected');
     const byType=LEAVE_TYPES.map(type=>{
-      const m=yrL.filter(l=>l.type===type);
-      return{type,count:m.length,days:m.reduce((s,l)=>s+(l.days||0),0)};
+      const m=yrL.filter(l=>l.LeaveType===type);
+      return{type,count:m.length,days:m.reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0)};
     }).filter(x=>x.count>0).sort((a,b)=>b.days-a.days);
     const maxD=Math.max(...byType.map(x=>x.days),1);
     viewHtml=`<div class="card" style="padding:22px">
-      <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px">Leave Type Breakdown · ${state.year}</div>
-      ${byType.length===0?'<div style="text-align:center;padding:30px;color:var(--muted)">No leave data for this year</div>':
+      <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px">Leave Type Breakdown · ${S.year}</div>
+      ${byType.length===0?'<div style="text-align:center;padding:30px;color:var(--muted)">No data for this year</div>':
         byType.map((x,i)=>`<div style="margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
             <span style="font-weight:500;color:var(--navy)">${x.type}</span>
@@ -932,10 +1327,11 @@ function renderReports(){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">Reports & Analytics</div><div class="page-sub">Full leave analysis · ${state.year}</div></div>
+    <div><div class="page-title">Reports & Analytics</div><div class="page-sub">Full leave analysis · ${S.year}</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn-ghost btn-sm" onclick="exportSummary()">⬇ Summary CSV</button>
       <button class="btn-ghost btn-sm" onclick="exportDetail()">⬇ Detail CSV</button>
+      <button class="btn-ghost btn-sm" onclick="refreshData()">↻ Refresh</button>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px">
@@ -948,36 +1344,51 @@ function renderReports(){
   <div style="margin-bottom:14px">
     <div class="seg">
       ${[['summary','Employee Summary'],['country','By Country'],['types','Leave Types']].map(([k,l])=>`
-        <button class="seg-btn${state.reportView===k?' active':''}" onclick="state.reportView='${k}';renderInPlace()">${l}</button>`).join('')}
+        <button class="seg-btn${S.reportView===k?' active':''}" onclick="S.reportView='${k}';renderInPlace()">${l}</button>`).join('')}
     </div>
   </div>
   ${viewHtml}`;
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
-function openAddEmployee(){
+function openAddEmployee() {
   openModal(`
   <div class="modal-header">
     <div class="modal-title">Add Employee</div>
     <button class="modal-close" onclick="closeModal()">✕</button>
   </div>
   <div class="modal-body">
+    <div class="info-banner">The employee must have a Microsoft 365 account. Enter their Azure AD Object ID so they can log in.</div>
     <div class="field"><label class="field-label">Full Name</label><input class="inp" id="m-name" placeholder="e.g. Sarah Johnson"></div>
     <div class="field"><label class="field-label">Role / Job Title</label><input class="inp" id="m-role" placeholder="e.g. Senior Developer"></div>
     <div class="grid-2">
       <div class="field"><label class="field-label">Country</label>
         <select class="inp" id="m-country" onchange="document.getElementById('m-allow').value=this.value==='UK'?25:21">
-          <option value="UK">🇬🇧 United Kingdom</option>
-          <option value="India">🇮🇳 India</option>
+          <option value="UK">🇬🇧 United Kingdom</option><option value="India">🇮🇳 India</option>
         </select>
       </div>
-      <div class="field"><label class="field-label">Annual Leave (days)</label><input class="inp" id="m-allow" type="number" min="0" max="60" value="25"></div>
+      <div class="field"><label class="field-label">Annual Leave (days)</label>
+        <input class="inp" id="m-allow" type="number" min="0" max="60" value="25">
+      </div>
     </div>
     <div class="field"><label class="field-label">Join Date</label><input class="inp" id="m-join" type="date" value="${today()}"></div>
+    <div class="field"><label class="field-label">Azure AD Object ID <span style="color:var(--muted);font-size:10px">(from Azure Portal → Users → select user → Object ID)</span></label>
+      <input class="inp" id="m-azid" placeholder="e.g. 12a34bc5-1234-abcd-5678-abc123def456">
+    </div>
+    <div class="field"><label class="field-label">System Role</label>
+      <select class="inp" id="m-sysrole">
+        <option value="Employee">Employee</option>
+        <option value="Manager">Manager</option>
+        <option value="HR">HR</option>
+        ${isAdmin()?'<option value="Admin">Admin</option>':''}
+      </select>
+    </div>
     <div class="cf-box">
-      <div class="cf-title">Carry Forward Settings</div>
+      <div class="cf-title">Carry Forward</div>
       <label class="check-row"><input type="checkbox" id="m-cf" checked> Enable carry forward of unused leave</label>
-      <div class="field" id="cf-max-row"><label class="field-label">Max carry forward (days)</label><input class="inp" id="m-cfmax" type="number" min="0" max="20" value="5"></div>
+      <div class="field" id="cf-max-row"><label class="field-label">Max carry forward (days)</label>
+        <input class="inp" id="m-cfmax" type="number" min="0" max="20" value="5">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" style="flex:1" onclick="closeModal()">Cancel</button>
@@ -989,33 +1400,67 @@ function openAddEmployee(){
   };
 }
 
-function saveEmployee(){
-  const name=document.getElementById('m-name').value.trim();
-  const role=document.getElementById('m-role').value.trim();
-  if(!name||!role){alert('Please fill in all required fields.');return;}
-  const emp={
-    id:'e'+uid(),name,role,
-    country:document.getElementById('m-country').value,
-    allowance:parseInt(document.getElementById('m-allow').value)||25,
-    joinDate:document.getElementById('m-join').value,
-    cfEnabled:document.getElementById('m-cf').checked,
-    cfMax:parseInt(document.getElementById('m-cfmax')?.value)||5,
-  };
-  state.employees.push(emp);
-  persist(); closeModal(); render(); toast('Employee added');
+async function saveEmployee() {
+  const name   = document.getElementById('m-name').value.trim();
+  const role   = document.getElementById('m-role').value.trim();
+  const azId   = document.getElementById('m-azid').value.trim();
+  const sysRole= document.getElementById('m-sysrole').value;
+  if (!name||!role) { alert('Please fill in all required fields.'); return; }
+
+  const btn = document.querySelector('#modal-box .btn-primary');
+  btn.disabled=true; btn.textContent='Saving…';
+
+  try {
+    // Create employee record
+    const empFields = {
+      Title: name,
+      Role: role,
+      Country: document.getElementById('m-country').value,
+      AnnualAllowance: parseInt(document.getElementById('m-allow').value)||25,
+      JoinDate: document.getElementById('m-join').value,
+      AzureObjectId: azId,
+      CarryForwardEnabled: document.getElementById('m-cf').checked,
+      MaxCarryForward: parseInt(document.getElementById('m-cfmax')?.value)||5,
+    };
+    const newEmp = await createListItem(S.siteId, S.lists.Employees, empFields);
+
+    // Create role record
+    if (azId) {
+      await createListItem(S.siteId, S.lists.Roles, {
+        Title: name, AzureObjectId: azId, Role: sysRole, Email: ''
+      });
+    }
+
+    await loadAllData();
+    closeModal(); render();
+    toast('Employee added successfully');
+  } catch(e) {
+    btn.disabled=false; btn.textContent='Add Employee';
+    toast('Error: '+e.message, 'err');
+  }
 }
 
-function removeEmployee(id){
-  const emp=state.employees.find(e=>e.id===id);
-  if(!confirm(`Remove ${emp?.name||'this employee'}? All their leave records will also be removed.`)) return;
-  state.employees=state.employees.filter(e=>e.id!==id);
-  state.leaves=state.leaves.filter(l=>l.empId!==id);
-  persist(); render(); toast('Employee removed');
+async function removeEmployee(id) {
+  const emp = S.employees.find(e=>String(e.id)===String(id));
+  if (!confirm(`Remove ${emp?.Title||'this employee'}? Their leave records will remain but they will be removed from the directory.`)) return;
+  try {
+    await deleteListItem(S.siteId, S.lists.Employees, id);
+    await loadAllData(); render();
+    toast('Employee removed');
+  } catch(e) {
+    toast('Error: '+e.message,'err');
+  }
 }
 
-function openApplyLeave(prefill={}){
-  const empOpts=state.employees.map(e=>`<option value="${e.id}" ${prefill.empId===e.id?'selected':''}>${e.country==='UK'?'🇬🇧':'🇮🇳'} ${e.name}</option>`).join('');
-  const typeOpts=LEAVE_TYPES.map(t=>`<option value="${t}"${t==='Annual Leave'?' selected':''}>${t}</option>`).join('');
+function openApplyLeave(prefillEmpId='') {
+  // Determine who we're applying for
+  const defaultEmpId = prefillEmpId || (S.myEmpRecord?String(S.myEmpRecord.id):'');
+  const empOpts = canManageEmployees()
+    ? S.employees.map(e=>`<option value="${e.id}" ${String(e.id)===defaultEmpId?'selected':''}>${e.Country==='UK'?'🇬🇧':'🇮🇳'} ${e.Title}</option>`).join('')
+    : S.myEmpRecord
+      ? `<option value="${S.myEmpRecord.id}" selected>${S.myEmpRecord.Title}</option>`
+      : '<option value="">No employee record found</option>';
+
   openModal(`
   <div class="modal-header">
     <div class="modal-title">Apply for Leave</div>
@@ -1023,77 +1468,109 @@ function openApplyLeave(prefill={}){
   </div>
   <div class="modal-body">
     <div class="field"><label class="field-label">Employee</label>
-      <select class="inp" id="m-emp" onchange="updateBalanceChip()">${empOpts}</select>
+      <select class="inp" id="m-emp" onchange="updateBalChip()" ${!canManageEmployees()?'disabled':''}>${empOpts}</select>
     </div>
-    <div id="balance-chip" class="bal-chip bal-ok" style="display:none"></div>
+    <div id="bal-chip" class="bal-chip bal-ok" style="display:none"></div>
     <div class="field"><label class="field-label">Leave Type</label>
-      <select class="inp" id="m-type" onchange="updateBalanceChip()">${typeOpts}</select>
+      <select class="inp" id="m-type" onchange="updateBalChip()">
+        ${LEAVE_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}
+      </select>
     </div>
     <div class="grid-2">
-      <div class="field"><label class="field-label">Start Date</label><input class="inp" id="m-start" type="date" value="${today()}" onchange="updateBalanceChip()"></div>
-      <div class="field"><label class="field-label">End Date</label><input class="inp" id="m-end" type="date" value="${today()}" onchange="updateBalanceChip()"></div>
+      <div class="field"><label class="field-label">Start Date</label><input class="inp" id="m-start" type="date" value="${today()}" onchange="updateBalChip()"></div>
+      <div class="field"><label class="field-label">End Date</label><input class="inp" id="m-end" type="date" value="${today()}" onchange="updateBalChip()"></div>
     </div>
-    <div class="field"><label class="field-label">Reason (optional)</label><textarea class="inp" id="m-reason" rows="3" placeholder="Brief description…" style="resize:vertical"></textarea></div>
+    <div class="field"><label class="field-label">Reason (optional)</label>
+      <textarea class="inp" id="m-reason" rows="3" placeholder="Brief description…" style="resize:vertical"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn-ghost" style="flex:1" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" style="flex:2" id="m-submit" onclick="saveLeave()">Submit Request</button>
     </div>
   </div>`,true);
-  setTimeout(updateBalanceChip,50);
+  setTimeout(updateBalChip, 50);
 }
 
-function updateBalanceChip(){
-  const empId=document.getElementById('m-emp')?.value;
-  const type=document.getElementById('m-type')?.value;
-  const start=document.getElementById('m-start')?.value;
-  const end=document.getElementById('m-end')?.value;
-  const chip=document.getElementById('balance-chip');
-  const btn=document.getElementById('m-submit');
-  if(!empId||!start||!end||end<start){chip.style.display='none';return;}
-  const emp=state.employees.find(e=>e.id===empId);
-  if(!emp){chip.style.display='none';return;}
-  const wd=calcWorkingDays(start,end,emp.country);
-  const used=getUsedDays(empId,state.year);
-  const tot=getTotalAllowance(emp,state.year);
-  const cf=getCarryFwd(emp,state.year);
-  const base=proRata(emp.allowance,emp.joinDate,state.year);
-  const rem=Math.max(0,tot-used);
-  const over=type==='Annual Leave'&&wd>rem;
+function updateBalChip() {
+  const empId  = document.getElementById('m-emp')?.value;
+  const type   = document.getElementById('m-type')?.value;
+  const start  = document.getElementById('m-start')?.value;
+  const end    = document.getElementById('m-end')?.value;
+  const chip   = document.getElementById('bal-chip');
+  const btn    = document.getElementById('m-submit');
+  if (!empId||!start||!end||end<start) { chip.style.display='none'; return; }
+  const emp = S.employees.find(e=>String(e.id)===empId);
+  if (!emp) { chip.style.display='none'; return; }
+  const wd   = calcWorkingDays(start, end, emp.Country);
+  const used = getUsedDays(emp.id, S.year);
+  const tot  = getTotalAllowance(emp, S.year);
+  const cf   = getCarryFwd(emp, S.year);
+  const base = proRata(emp.AnnualAllowance||25, emp.JoinDate, S.year);
+  const rem  = Math.max(0, tot-used);
+  const over = type==='Annual Leave' && wd>rem;
   chip.style.display='flex';
   chip.className=`bal-chip ${over?'bal-warn':'bal-ok'}`;
   chip.innerHTML=`<span>${over?'⚠️':'✅'}</span><span>${wd} working day${wd!==1?'s':''} · ${over?`Exceeds balance of ${rem}d remaining`:`${rem}d remaining`} (Base: ${base}d${cf>0?' + '+cf+'d CF':''})</span>`;
-  if(btn) btn.disabled=over,btn.style.opacity=over?.5:1,btn.style.cursor=over?'not-allowed':'pointer';
+  if(btn){ btn.disabled=over; btn.style.opacity=over?.5:1; btn.style.cursor=over?'not-allowed':'pointer'; }
 }
 
-function saveLeave(){
-  const empId=document.getElementById('m-emp').value;
-  const start=document.getElementById('m-start').value;
-  const end=document.getElementById('m-end').value;
-  const type=document.getElementById('m-type').value;
-  const reason=document.getElementById('m-reason').value;
-  if(!empId||!start||!end){alert('Please fill all required fields.');return;}
-  if(end<start){alert('End date must be on or after start date.');return;}
-  const emp=state.employees.find(e=>e.id===empId);
-  const wd=calcWorkingDays(start,end,emp.country);
-  const used=getUsedDays(empId,state.year);
-  const tot=getTotalAllowance(emp,state.year);
-  if(type==='Annual Leave'&&wd>Math.max(0,tot-used)){alert('Insufficient annual leave balance.');return;}
-  state.leaves.push({id:'l'+uid(),empId,type,start,end,days:wd,reason,status:'Pending',applied:today()});
-  persist(); closeModal(); render(); toast('Leave request submitted');
+async function saveLeave() {
+  const empId  = document.getElementById('m-emp').value;
+  const start  = document.getElementById('m-start').value;
+  const end    = document.getElementById('m-end').value;
+  const type   = document.getElementById('m-type').value;
+  const reason = document.getElementById('m-reason').value;
+  if (!empId||!start||!end) { alert('Please fill all required fields.'); return; }
+  if (end<start) { alert('End date must be on or after start date.'); return; }
+  const emp = S.employees.find(e=>String(e.id)===empId);
+  if (!emp) { alert('Employee not found.'); return; }
+  const wd   = calcWorkingDays(start, end, emp.Country);
+  const used = getUsedDays(emp.id, S.year);
+  const tot  = getTotalAllowance(emp, S.year);
+  if (type==='Annual Leave' && wd>Math.max(0,tot-used)) { alert('Insufficient annual leave balance.'); return; }
+
+  const btn=document.getElementById('m-submit');
+  btn.disabled=true; btn.textContent='Submitting…';
+
+  try {
+    await createListItem(S.siteId, S.lists.LeaveRequests, {
+      Title: `${emp.Title} - ${type} - ${start}`,
+      EmployeeId: String(empId),
+      EmployeeName: emp.Title,
+      LeaveType: type,
+      StartDate: start,
+      EndDate: end,
+      WorkingDays: wd,
+      Reason: reason,
+      Status: 'Pending',
+      AppliedOn: today(),
+      AzureObjectId: S.user.id,
+    });
+    await loadAllData();
+    closeModal(); render();
+    toast('Leave request submitted');
+  } catch(e) {
+    btn.disabled=false; btn.textContent='Submit Request';
+    toast('Error: '+e.message,'err');
+  }
 }
 
-function openLeaveDetail(id){
-  const lv=state.leaves.find(l=>l.id===id);
-  if(!lv) return;
-  const emp=state.employees.find(e=>e.id===lv.empId);
-  const cs=emp?.country==='UK'?{flag:'🇬🇧',bg:'var(--uk-bg)',text:'var(--uk-text)'}:{flag:'🇮🇳',bg:'var(--in-bg)',text:'var(--in-text)'};
+function openLeaveDetail(id) {
+  const lv = S.leaves.find(l=>String(l.id)===String(id));
+  if (!lv) return;
+  const emp = S.employees.find(e=>String(e.id)===lv.EmployeeId);
+  const cs  = emp?.Country==='UK'?{flag:'🇬🇧'}:{flag:'🇮🇳'};
 
-  const actionBtns=lv.status==='Pending'
-    ?`<button class="btn-ghost btn-danger" style="flex:1" onclick="setLeaveStatus('${id}','Rejected')">✕ Reject</button>
-       <button class="btn-primary" style="flex:2;background:linear-gradient(135deg,#15803D,#16A34A)" onclick="setLeaveStatus('${id}','Approved')">✓ Approve</button>`
-    :lv.status==='Approved'
-    ?`<button class="btn-ghost btn-danger" style="width:100%" onclick="setLeaveStatus('${id}','Rejected')">Revoke Approval</button>`:
-    `<button class="btn-ghost" style="width:100%" onclick="setLeaveStatus('${id}','Pending')">Restore to Pending</button>`;
+  const canAct = canApprove() || (S.role==='Manager' && S.employees.some(e=>String(e.id)===lv.EmployeeId&&e.ManagerId===S.user.id));
+
+  const actionBtns = lv.Status==='Pending' && canAct
+    ? `<button class="btn-ghost btn-danger" style="flex:1" onclick="setLeaveStatus('${lv.id}','Rejected')">✕ Reject</button>
+       <button class="btn-approve" style="flex:2" onclick="setLeaveStatus('${lv.id}','Approved')">✓ Approve</button>`
+    : lv.Status==='Approved' && canAct
+    ? `<button class="btn-ghost btn-danger" style="width:100%" onclick="setLeaveStatus('${lv.id}','Rejected')">Revoke Approval</button>`
+    : lv.Status==='Pending' && lv.AzureObjectId===S.user.id
+    ? `<button class="btn-ghost btn-danger" style="width:100%" onclick="setLeaveStatus('${lv.id}','Rejected')">Cancel Request</button>`
+    : '';
 
   openModal(`
   <div class="modal-header">
@@ -1102,54 +1579,71 @@ function openLeaveDetail(id){
   </div>
   <div class="modal-body">
     <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:13px;background:var(--subtle);border-radius:9px">
-      ${avHtml(emp?.name,emp?.country,42)}
+      ${avHtml(emp?.Title,emp?.Country,42)}
       <div style="flex:1">
-        <div style="font-weight:700;font-size:14px;color:var(--navy)">${emp?.name||'Unknown'}</div>
-        <div style="font-size:11px;color:var(--muted)">${cs.flag} ${emp?.role||''}</div>
+        <div style="font-weight:700;font-size:14px;color:var(--navy)">${emp?.Title||'Unknown'}</div>
+        <div style="font-size:11px;color:var(--muted)">${cs.flag} ${emp?.Role||''}</div>
       </div>
-      ${statusBadge(lv.status)}
+      ${statusBadge(lv.Status)}
     </div>
-    ${[['Leave Type',lv.type],['Start Date',fmt(lv.start)],['End Date',fmt(lv.end)],
-       ['Working Days',lv.days+' day'+(lv.days!==1?'s':'')],['Applied On',fmt(lv.applied)],['Reason',lv.reason||'—']]
-    .map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+    ${[['Leave Type',lv.LeaveType],['Start Date',fmt(lv.StartDate?.split('T')[0])],['End Date',fmt(lv.EndDate?.split('T')[0])],
+       ['Working Days',(lv.WorkingDays||0)+' day'+(lv.WorkingDays!=1?'s':'')],
+       ['Applied On',fmt(lv.AppliedOn?.split('T')[0])],
+       ['Reason',lv.Reason||'—'],
+       lv.ApprovedBy?['Approved By',lv.ApprovedBy]:null,
+    ].filter(Boolean).map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:12.5px;color:var(--muted)">${l}</span>
-      <span style="font-size:13px;font-weight:500;max-width:58%;text-align:right">${v}</span>
+      <span style="font-size:13px;font-weight:500;max-width:60%;text-align:right">${v}</span>
     </div>`).join('')}
-    <div class="modal-actions">${actionBtns}</div>
+    ${actionBtns?`<div class="modal-actions">${actionBtns}</div>`:''}
   </div>`);
 }
 
-function setLeaveStatus(id,status){
-  const lv=state.leaves.find(l=>l.id===id);
-  if(lv) lv.status=status;
-  persist(); closeModal(); render(); toast(`Leave ${status.toLowerCase()}`);
+async function setLeaveStatus(id, status) {
+  const btn = document.querySelector('#modal-box button:last-child');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  try {
+    const fields = { Status: status };
+    if (status==='Approved') fields.ApprovedBy = S.user.displayName;
+    await updateListItem(S.siteId, S.lists.LeaveRequests, id, fields);
+    await loadAllData();
+    closeModal(); render();
+    toast(`Leave ${status.toLowerCase()}`);
+  } catch(e) {
+    toast('Error: '+e.message,'err');
+    if(btn){ btn.disabled=false; btn.textContent=status; }
+  }
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
-function exportSummary(){
-  const rows=state.employees.map(emp=>{
-    const base=proRata(emp.allowance,emp.joinDate,state.year);
-    const cf=getCarryFwd(emp,state.year);
+function exportSummary() {
+  const rows = S.employees.map(emp=>{
+    const base=proRata(emp.AnnualAllowance||25,emp.JoinDate,S.year);
+    const cf=getCarryFwd(emp,S.year);
     const tot=base+cf;
-    const used=getUsedDays(emp.id,state.year);
-    const pend=state.leaves.filter(l=>l.empId===emp.id&&l.status==='Pending').reduce((s,l)=>s+(l.days||0),0);
+    const used=getUsedDays(emp.id,S.year);
+    const pend=S.leaves.filter(l=>l.EmployeeId===String(emp.id)&&l.Status==='Pending').reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
     const rem=Math.max(0,tot-used-pend);
-    const sick=state.leaves.filter(l=>l.empId===emp.id&&l.type==='Sick Leave'&&l.status==='Approved'&&new Date(l.start).getFullYear()===state.year).reduce((s,l)=>s+(l.days||0),0);
-    return{'Name':emp.name,'Role':emp.role,'Country':emp.country,'Join Date':emp.joinDate,'Base Allowance':base,'Carry Forward':cf,'Total Allowance':tot,'Used':used,'Pending':pend,'Remaining':rem,'Sick Days':sick};
+    const sick=S.leaves.filter(l=>l.EmployeeId===String(emp.id)&&l.LeaveType==='Sick Leave'&&l.Status==='Approved'&&new Date(l.StartDate).getFullYear()===S.year).reduce((s,l)=>s+(parseInt(l.WorkingDays)||0),0);
+    return{'Name':emp.Title,'Role':emp.Role||'','Country':emp.Country,'Join Date':emp.JoinDate||'',
+      'Base Allowance':base,'Carry Forward':cf,'Total Allowance':tot,'Used':used,'Pending':pend,'Remaining':rem,'Sick Days':sick};
   });
-  dlCSV(rows,`leave-summary-${state.year}.csv`);
+  dlCSV(rows,`leave-summary-${S.year}.csv`);
 }
 
-function exportDetail(){
-  const rows=state.leaves.filter(l=>new Date(l.start).getFullYear()===state.year).map(l=>{
-    const emp=state.employees.find(e=>e.id===l.empId)||{};
-    return{'Employee':emp.name||'','Country':emp.country||'','Role':emp.role||'','Type':l.type,'Start':l.start,'End':l.end,'Working Days':l.days,'Status':l.status,'Reason':l.reason||'','Applied On':l.applied||''};
+function exportDetail() {
+  const rows = S.leaves.filter(l=>new Date(l.StartDate).getFullYear()===S.year).map(l=>{
+    const emp=S.employees.find(e=>String(e.id)===l.EmployeeId)||{};
+    return{'Employee':emp.Title||l.EmployeeName||'','Country':emp.Country||'','Role':emp.Role||'',
+      'Type':l.LeaveType,'Start':l.StartDate?.split('T')[0],'End':l.EndDate?.split('T')[0],
+      'Working Days':l.WorkingDays||0,'Status':l.Status,'Reason':l.Reason||'',
+      'Applied On':l.AppliedOn?.split('T')[0]||'','Approved By':l.ApprovedBy||''};
   });
-  dlCSV(rows,`leave-detail-${state.year}.csv`);
+  dlCSV(rows,`leave-detail-${S.year}.csv`);
 }
 
 function dlCSV(rows,filename){
-  if(!rows.length){alert('No data to export.');return;}
+  if(!rows.length){ alert('No data to export.'); return; }
   const h=Object.keys(rows[0]).join(',');
   const b=rows.map(r=>Object.values(r).map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -1158,30 +1652,20 @@ function dlCSV(rows,filename){
   toast(`Exported ${filename}`);
 }
 
-// ─── Partial re-render ────────────────────────────────────────────────────────
-function renderInPlace(){
-  const el=document.getElementById('content');
-  el.innerHTML='';
-  const wrap=document.createElement('div');
-  wrap.className='tab-content';
-  wrap.innerHTML=renderTab();
-  el.appendChild(wrap);
-  attachTabEvents();
-  updatePills();
-}
-
-function attachTabEvents(){
-  // topbar year buttons re-attached on render
-  document.querySelectorAll('.year-btn').forEach(b=>{
-    b.onclick=()=>{state.year=parseInt(b.dataset.year);render();};
-  });
-  document.getElementById('btn-apply').onclick=()=>openApplyLeave();
-  document.getElementById('btn-add-emp').onclick=()=>openAddEmployee();
-}
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
-hydrate();
-render();
+(async function init() {
+  await msal.initialize();
+  // Handle redirect (if any)
+  try { await msal.handleRedirectPromise(); } catch {}
+
+  // Check if already signed in
+  const accounts = msal.getAllAccounts();
+  if (accounts.length > 0) {
+    msal.setActiveAccount(accounts[0]);
+    await bootApp();
+  }
+  // Otherwise login screen is shown by default
+})();
 </script>
 </body>
 </html>
