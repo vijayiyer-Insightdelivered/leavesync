@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>LeaveSync</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script src="https://unpkg.com/@azure/msal-browser@3.14.0/lib/msal-browser.min.js"></script>
 <style>
   :root{
     --bg:#F7F6F2;--surface:#FFF;--border:#E6E5DF;--text:#1A1A18;
@@ -302,7 +302,8 @@ const msalConfig = {
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
 };
 
-let msalApp = null;
+var msalApp = null;
+// MSAL v3 uses PublicClientApplication from window.msal namespace
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
@@ -1657,9 +1658,7 @@ function dlCSV(rows,filename){
   const signInBtn = document.querySelector('.ms-btn');
   if (signInBtn) { signInBtn.disabled = true; signInBtn.textContent = 'Loading...'; }
   try {
-    msalApp = new msal.PublicClientApplication(msalConfig);
-    await msalApp.initialize();
-    try { await msalApp.handleRedirectPromise(); } catch {}
+    msalApp = await msal.PublicClientApplication.createPublicClientApplication(msalConfig);
     if (signInBtn) {
       signInBtn.disabled = false;
       signInBtn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
