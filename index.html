@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>LeaveSync</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/2.38.0/msal-browser.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
 <style>
   :root{
     --bg:#F7F6F2;--surface:#FFF;--border:#E6E5DF;--text:#1A1A18;
@@ -302,7 +302,7 @@ const msalConfig = {
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
 };
 
-const msalApp = new msal.PublicClientApplication(msalConfig);
+let msalApp = null;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
@@ -1654,6 +1654,8 @@ function dlCSV(rows,filename){
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
+  // Create and initialise MSAL instance
+  msalApp = new msal.PublicClientApplication(msalConfig);
   await msalApp.initialize();
   // Handle redirect (if any)
   try { await msalApp.handleRedirectPromise(); } catch {}
