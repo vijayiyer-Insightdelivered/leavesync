@@ -535,9 +535,12 @@ function hideLoading() {
   if (login) login.style.display = 'flex';
 }
 function showApp() {
-  document.getElementById('loading-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'block';
+  const loading = document.getElementById('loading-screen');
+  const login   = document.getElementById('login-screen');
+  const app     = document.getElementById('app-screen');
+  if (loading) loading.style.display = 'none';
+  if (login)   login.style.display   = 'none';
+  if (app)     app.style.display     = 'block';
   render();
 }
 function showError(msg) {
@@ -545,8 +548,10 @@ function showError(msg) {
   document.getElementById('login-screen').style.display = 'flex';
 }
 function showSetupError(missing) {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'block';
+  const loginEl = document.getElementById('login-screen');
+  const appEl   = document.getElementById('app-screen');
+  if (loginEl) loginEl.style.display = 'none';
+  if (appEl)   appEl.style.display   = 'block';
   const contentEl = document.getElementById('content');
   if (contentEl) contentEl.innerHTML = `
     <div class="error-banner" style="margin-top:40px;flex-direction:column;align-items:flex-start;gap:12px">
@@ -672,13 +677,16 @@ function toast(msg, type='ok') {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 function openModal(html, large=false) {
-  const box=document.getElementById('modal-box');
-  box.className='modal'+(large?' modal-lg':'');
-  box.innerHTML=html;
-  document.getElementById('modal-overlay').style.display='flex';
+  const box     = document.getElementById('modal-box');
+  const overlay = document.getElementById('modal-overlay');
+  if (!box || !overlay) return;
+  box.className = 'modal'+(large?' modal-lg':'');
+  box.innerHTML = html;
+  overlay.style.display = 'flex';
 }
 function closeModal() {
-  document.getElementById('modal-overlay').style.display='none';
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -743,8 +751,10 @@ function updateTopbar() {
     b.classList.toggle('active', parseInt(b.dataset.year)===S.year);
     b.onclick=()=>{ S.year=parseInt(b.dataset.year); render(); };
   });
-  document.getElementById('btn-apply').style.display = 'inline-flex';
-  document.getElementById('btn-add-emp').style.display = canManageEmployees() ? 'inline-flex' : 'none';
+  const applyBtn  = document.getElementById('btn-apply');
+  const addEmpBtn = document.getElementById('btn-add-emp');
+  if (applyBtn)  applyBtn.style.display  = 'inline-flex';
+  if (addEmpBtn) addEmpBtn.style.display = canManageEmployees() ? 'inline-flex' : 'none';
 }
 
 function updatePills() {
