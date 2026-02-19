@@ -755,6 +755,7 @@ window.onload = async function () {
 
   } catch (e) {
     console.error('[LeaveSync]', e);
+    hideLoading();
     if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
     showLoginError(e.message);
   }
