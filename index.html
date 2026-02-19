@@ -316,8 +316,7 @@ const msalConfig = {
   cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
 };
 
-// Instantiate once — initialize() is called in window.onload before any auth operation
-const msalApp = new msal.PublicClientApplication(msalConfig);
+var msalApp = null; // created inside window.onload so CDN failures are caught
 
 // ─── State ────────────────────────────────────────────────────────────────────
 var S = {
@@ -636,6 +635,7 @@ const MS_BTN_LABEL = '<div class="ms-logo">'
   + '</div> Sign in with Microsoft';
 
 async function signIn() {
+  if (!msalApp) { alert('App is still initialising — please wait a moment and try again.'); return; }
   var btn = document.getElementById('sign-in-btn');
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Signing in\u2026'; }
@@ -643,20 +643,34 @@ async function signIn() {
     msalApp.setActiveAccount(result.account);
     await bootApp();
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-    if (e.errorCode !== 'user_cancelled') {
-      console.error('Sign-in error:', e);
-      alert('Sign in failed: ' + e.message);
+    // Popup was blocked by the browser — fall back to redirect flow
+    if (e.errorCode === 'popup_window_error' || e.errorCode === 'empty_window_error') {
+      try {
+        await msalApp.loginRedirect({ scopes: SCOPES });
+        return; // page will navigate away to Microsoft login
+      } catch (re) {
+        if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+        if (re.errorCode !== 'user_cancelled') alert('Sign in failed: ' + re.message);
+      }
+    } else {
+      if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+      if (e.errorCode !== 'user_cancelled') {
+        console.error('Sign-in error:', e);
+        alert('Sign in failed: ' + e.message);
+      }
     }
   }
 }
 
 function signOut() {
-  msalApp.logoutPopup({ account: msalApp.getActiveAccount() });
+  if (!msalApp) return;
+  var account = msalApp.getActiveAccount();
+  msalApp.logoutPopup({ account: account })
+    .catch(function () { msalApp.logoutRedirect({ account: account }); });
 }
 
 async function getToken() {
-  var account = msalApp.getActiveAccount();
+  var account = msalApp ? msalApp.getActiveAccount() : null;
   if (!account) throw new Error('Not signed in');
   try {
     var silent = await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
@@ -670,9 +684,22 @@ async function getToken() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 window.onload = async function () {
   try {
+    if (typeof msal === 'undefined') {
+      throw new Error('Microsoft sign-in library failed to load — check your internet connection and refresh.');
+    }
+
+    msalApp = new msal.PublicClientApplication(msalConfig);
     await msalApp.initialize();
 
-    // Restore an existing session automatically
+    // Handle the return from a redirect-based sign-in (popup-blocked fallback)
+    var redirectResult = await msalApp.handleRedirectPromise();
+    if (redirectResult && redirectResult.account) {
+      msalApp.setActiveAccount(redirectResult.account);
+      await bootApp();
+      return;
+    }
+
+    // Restore an existing cached session
     var accounts = msalApp.getAllAccounts();
     if (accounts.length > 0) {
       msalApp.setActiveAccount(accounts[0]);
@@ -680,7 +707,7 @@ window.onload = async function () {
       return;
     }
 
-    // No session found — login screen is shown by default
+    // No session — login screen is shown by default
 
   } catch (e) {
     console.error('MSAL init error:', e);
