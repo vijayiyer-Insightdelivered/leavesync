@@ -618,7 +618,7 @@ function render(){
       {key:'reports',label:'Reports',icon:'◆',show:canApprove()},
     ].filter(function(t){return t.show;});
     navEl.innerHTML=tabs.map(function(t){
-      return '<button class="nav-btn'+(S.tab===t.key?' active':'')+'" onclick="S.tab=''+t.key+'';render()"><span class="nav-icon">'+t.icon+'</span><span>'+t.label+'</span></button>';
+      return '<button class="nav-btn'+(S.tab===t.key?' active':'')+'" onclick="S.tab=\''+t.key+'\';render()"><span class="nav-icon">'+t.icon+'</span><span>'+t.label+'</span></button>';
     }).join('');
   }
 
