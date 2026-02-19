@@ -224,7 +224,7 @@ nav{flex:1;padding:4px 8px;overflow-y:auto}
     </div>
     <div class="login-sub">Leave Manager &nbsp;·&nbsp; UK & India</div>
     <div class="login-divider"></div>
-    <button class="ms-btn" id="sign-in-btn" onclick="signIn()">
+    <button type="button" class="ms-btn" id="sign-in-btn" onclick="signIn()">
       <div class="ms-logo">
         <div style="background:#F25022"></div><div style="background:#7FBA00"></div>
         <div style="background:#00A4EF"></div><div style="background:#FFB900"></div>
@@ -433,6 +433,11 @@ async function bootApp() {
   } catch(e) {
     console.error(e);
     hideLoading();
+    var btn = document.getElementById('sign-in-btn');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
+    }
     alert('Failed to load: ' + e.message);
   }
 }
