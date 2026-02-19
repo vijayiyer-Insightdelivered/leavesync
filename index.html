@@ -224,14 +224,11 @@ nav{flex:1;padding:4px 8px;overflow-y:auto}
     </div>
     <div class="login-sub">Leave Manager &nbsp;·&nbsp; UK & India</div>
     <div class="login-divider"></div>
-    <button type="button" class="ms-btn" id="sign-in-btn" onclick="signIn()">
-      <div class="ms-logo">
-        <div style="background:#F25022"></div><div style="background:#7FBA00"></div>
-        <div style="background:#00A4EF"></div><div style="background:#FFB900"></div>
-      </div>
-      Sign in with Microsoft
+    <button type="button" class="ms-btn" id="sign-in-btn" onclick="signIn()" disabled>
+      Loading&hellip;
     </button>
     <div class="login-note">Sign in with your Insight Delivered Microsoft 365 account.</div>
+    <div id="login-error" style="display:none;margin-top:12px;padding:10px 14px;background:#fff0f0;border:1px solid #f5c6cb;border-radius:6px;color:#c0392b;font-size:12px;text-align:left;word-break:break-word"></div>
   </div>
 </div>
 
@@ -316,7 +313,8 @@ const msalConfig = {
   cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
 };
 
-var msalApp = null; // created inside window.onload so CDN failures are caught
+var msalApp   = null;  // created inside window.onload so CDN failures are caught
+var msalReady = false; // true only after initialize() succeeds
 
 // ─── State ────────────────────────────────────────────────────────────────────
 var S = {
@@ -634,30 +632,34 @@ const MS_BTN_LABEL = '<div class="ms-logo">'
   + '<div style="background:#FFB900"></div>'
   + '</div> Sign in with Microsoft';
 
+function showLoginError(msg) {
+  var el = document.getElementById('login-error');
+  if (el) { el.style.display = 'block'; el.textContent = msg; }
+  console.error('[LeaveSync]', msg);
+}
+
 async function signIn() {
-  if (!msalApp) { alert('App is still initialising — please wait a moment and try again.'); return; }
+  if (!msalReady) { showLoginError('Still initialising — please wait a moment and try again.'); return; }
   var btn = document.getElementById('sign-in-btn');
+  var errEl = document.getElementById('login-error');
+  if (errEl) errEl.style.display = 'none';
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Signing in\u2026'; }
     var result = await msalApp.loginPopup({ scopes: SCOPES });
     msalApp.setActiveAccount(result.account);
     await bootApp();
   } catch (e) {
-    // Popup was blocked by the browser — fall back to redirect flow
+    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+    // Popup was blocked — fall back to full-page redirect
     if (e.errorCode === 'popup_window_error' || e.errorCode === 'empty_window_error') {
       try {
         await msalApp.loginRedirect({ scopes: SCOPES });
-        return; // page will navigate away to Microsoft login
+        return; // page navigates away to Microsoft login
       } catch (re) {
-        if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-        if (re.errorCode !== 'user_cancelled') alert('Sign in failed: ' + re.message);
+        if (re.errorCode !== 'user_cancelled') showLoginError('Sign in failed: ' + re.message);
       }
-    } else {
-      if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-      if (e.errorCode !== 'user_cancelled') {
-        console.error('Sign-in error:', e);
-        alert('Sign in failed: ' + e.message);
-      }
+    } else if (e.errorCode !== 'user_cancelled') {
+      showLoginError('Sign in failed: ' + (e.message || e.errorCode || e));
     }
   }
 }
@@ -683,18 +685,26 @@ async function getToken() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 window.onload = async function () {
+  var btn = document.getElementById('sign-in-btn');
   try {
     if (typeof msal === 'undefined') {
-      throw new Error('Microsoft sign-in library failed to load — check your internet connection and refresh.');
+      throw new Error('Microsoft sign-in library failed to load. Check your internet connection and refresh the page.');
     }
 
     msalApp = new msal.PublicClientApplication(msalConfig);
     await msalApp.initialize();
 
-    // Handle the return from a redirect-based sign-in (popup-blocked fallback)
-    var redirectResult = await msalApp.handleRedirectPromise();
+    // Handle the return leg of a redirect-based sign-in (popup-blocked fallback).
+    // Wrapped separately so stale redirect state never kills the whole init.
+    var redirectResult = null;
+    try {
+      redirectResult = await msalApp.handleRedirectPromise();
+    } catch (redirectErr) {
+      console.warn('[LeaveSync] Stale redirect state cleared:', redirectErr.message);
+    }
     if (redirectResult && redirectResult.account) {
       msalApp.setActiveAccount(redirectResult.account);
+      msalReady = true;
       await bootApp();
       return;
     }
@@ -703,15 +713,19 @@ window.onload = async function () {
     var accounts = msalApp.getAllAccounts();
     if (accounts.length > 0) {
       msalApp.setActiveAccount(accounts[0]);
+      msalReady = true;
       await bootApp();
       return;
     }
 
-    // No session — login screen is shown by default
+    // No session — show login screen with button enabled
+    msalReady = true;
+    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
 
   } catch (e) {
-    console.error('MSAL init error:', e);
-    alert('App failed to load: ' + e.message);
+    console.error('[LeaveSync] Init error:', e);
+    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+    showLoginError('App failed to load: ' + e.message);
   }
 };
 </script>
