@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Leave Manager | Insight Delivered</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://unpkg.com/@azure/msal-browser@3.14.0/lib/msal-browser.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
 :root{
   --bg:#F5F5F5;--surface:#FFF;--border:#E2E4E8;--text:#262E31;
@@ -655,14 +655,15 @@ async function getToken() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 window.onload = async function() {
-  // Find the sign-in button (it has class ms-btn)
-  var btn = document.querySelector('.ms-btn');
+  var btn = document.getElementById('sign-in-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
 
   try {
-    msalApp = await msal.PublicClientApplication.createPublicClientApplication(msalConfig);
+    // MSAL v2 initialisation
+    msalApp = new msal.PublicClientApplication(msalConfig);
+    await msalApp.initialize();
 
-    // Handle the redirect response when Microsoft sends user back
+    // Handle redirect response after Microsoft login
     var response = await msalApp.handleRedirectPromise();
     if (response && response.account) {
       msalApp.setActiveAccount(response.account);
@@ -670,7 +671,7 @@ window.onload = async function() {
       return;
     }
 
-    // Check for an existing signed-in session
+    // Check for existing session
     var accounts = msalApp.getAllAccounts();
     if (accounts.length > 0) {
       msalApp.setActiveAccount(accounts[0]);
@@ -678,7 +679,7 @@ window.onload = async function() {
       return;
     }
 
-    // No session — show the login screen with button enabled
+    // No session - enable sign in button
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
@@ -687,7 +688,7 @@ window.onload = async function() {
   } catch(e) {
     console.error('MSAL init error:', e);
     if (btn) { btn.disabled = false; btn.textContent = 'Sign in with Microsoft'; }
-    alert('App initialisation failed: ' + e.message);
+    alert('App failed to load: ' + e.message);
   }
 };
 </script>
