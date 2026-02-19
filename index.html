@@ -704,12 +704,12 @@ function signOut() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 window.onload = async function () {
   var btn = document.getElementById('sign-in-btn');
-  try {
-    // ── Handle return from Microsoft (auth code in URL) ──
-    var sp = new URLSearchParams(window.location.search);
-    if (sp.has('code') || sp.has('error')) {
-      showLoading('Completing sign-in\u2026');
 
+  // ── Handle return from Microsoft (auth code in URL) ──
+  var sp = new URLSearchParams(window.location.search);
+  if (sp.has('code') || sp.has('error')) {
+    showLoading('Completing sign-in\u2026');
+    try {
       if (sp.has('error')) {
         var desc = (sp.get('error_description') || sp.get('error') || '').replace(/\+/g,' ');
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -739,25 +739,30 @@ window.onload = async function () {
       if (!r.ok) throw new Error((d.error_description || d.error || 'Token exchange failed ('+r.status+')').replace(/\+/g,' '));
       _saveTokens(d);
       await bootApp();
+    } catch (e) {
+      console.error('[LeaveSync]', e);
+      hideLoading();
+      if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+      showLoginError(e.message);
+    }
+    return;
+  }
+
+  // ── Enable button immediately so login is always interactive ──
+  if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
+
+  // ── Try to restore existing session silently ──
+  try {
+    if (_hasValidToken()) {
+      await bootApp();
       return;
     }
-
-    // ── Restore existing session ──
-    if (_hasValidToken()) {
-      try { await bootApp(); return; } catch(e) { _clearTokens(); }
-    }
     if (localStorage.getItem('ls_rt')) {
-      try { await getToken(); await bootApp(); return; } catch(e) { _clearTokens(); }
+      await getToken();
+      await bootApp();
     }
-
-    // ── No session — show login ──
-    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-
-  } catch (e) {
-    console.error('[LeaveSync]', e);
-    hideLoading();
-    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-    showLoginError(e.message);
+  } catch(e) {
+    _clearTokens();
   }
 };
 </script>
