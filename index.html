@@ -763,5 +763,39 @@ function updatePills() {
   if (ukEl) ukEl.textContent = S.employees.filter(e=>e.Country==='UK').length;
   if (inEl) inEl.textContent = S.employees.filter(e=>e.Country==='India').length;
 }
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', async function() {
+  const signInBtn = document.querySelector('.ms-btn');
+  if (signInBtn) { signInBtn.disabled = true; signInBtn.textContent = 'Loading...'; }
+  try {
+    msalApp = await msal.PublicClientApplication.createPublicClientApplication(msalConfig);
 
+    // Handle redirect response (called after Microsoft redirects back)
+    const response = await msalApp.handleRedirectPromise();
+    if (response) {
+      msalApp.setActiveAccount(response.account);
+      await bootApp();
+      return;
+    }
 
+    // Re-enable sign in button
+    if (signInBtn) {
+      signInBtn.disabled = false;
+      signInBtn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
+    }
+
+    // Check if already signed in from previous session
+    const accounts = msalApp.getAllAccounts();
+    if (accounts.length > 0) {
+      msalApp.setActiveAccount(accounts[0]);
+      await bootApp();
+    }
+  } catch(e) {
+    if (signInBtn) { signInBtn.disabled = false; signInBtn.textContent = 'Sign in with Microsoft'; }
+    console.error('Init error:', e);
+    alert('App failed to initialise: ' + e.message);
+  }
+});
+</script>
+</body>
+</html>
