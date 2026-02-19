@@ -622,7 +622,7 @@ function renderTab(){
   }
 }
 
-async async function signIn() {
+async function signIn() {
   if (!msalApp) { alert('App still loading, please wait.'); return; }
   var btn = document.getElementById('sign-in-btn');
   try {
@@ -642,7 +642,7 @@ function signOut() {
   msalApp.logoutRedirect({ account: msalApp.getActiveAccount() });
 }
 
-async async function getToken() {
+async function getToken() {
   const account = msalApp ? msalApp.getActiveAccount() : null;
   if (!account) throw new Error('Not signed in');
   try {
