@@ -412,7 +412,7 @@ async function getSiteId() {
 }
 
 async function getListId(siteId, name) {
-  var data = await graphGet('/sites/' + siteId + '/lists?$filter=displayName eq '' + name + ''');
+  var data = await graphGet('/sites/' + siteId + "/lists?$filter=displayName eq '" + name + "'");
   if (!data.value || data.value.length === 0) throw new Error('List not found: ' + name);
   return data.value[0].id;
 }
