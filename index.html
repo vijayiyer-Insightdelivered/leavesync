@@ -705,9 +705,12 @@ function renderInPlace() {
 
 function updateSidebar() {
   const ini = (S.user?.displayName||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
-  document.getElementById('user-av').textContent = ini;
-  document.getElementById('user-name').textContent = S.user?.displayName||'—';
-  document.getElementById('user-role-label').textContent = S.role||'Employee';
+  const avEl = document.getElementById('user-av');
+  const nameEl = document.getElementById('user-name');
+  const roleEl = document.getElementById('user-role-label');
+  if (avEl) avEl.textContent = ini;
+  if (nameEl) nameEl.textContent = S.user?.displayName||'—';
+  if (roleEl) roleEl.textContent = S.role||'Employee';
 
   const tabs = [
     {key:'dashboard', label:'Dashboard', icon:'◈', show: true},
@@ -739,8 +742,10 @@ function updateTopbar() {
 }
 
 function updatePills() {
-  document.getElementById('pill-uk').textContent    = S.employees.filter(e=>e.Country==='UK').length;
-  document.getElementById('pill-india').textContent = S.employees.filter(e=>e.Country==='India').length;
+  const ukEl = document.getElementById('pill-uk');
+  const inEl = document.getElementById('pill-india');
+  if (ukEl) ukEl.textContent = S.employees.filter(e=>e.Country==='UK').length;
+  if (inEl) inEl.textContent = S.employees.filter(e=>e.Country==='India').length;
 }
 
 function attachGlobalEvents() {
