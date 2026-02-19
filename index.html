@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Leave Manager | Insight Delivered</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://alcdn.msftauth.net/browser/2.38.3/js/msal-browser.min.js'"></script>
 <style>
 :root{
   --bg:#F5F5F5;--surface:#FFF;--border:#E2E4E8;--text:#262E31;
@@ -304,17 +303,8 @@ const TENANT_ID  = '88c82b29-b553-4794-980c-010e970904c7';
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const SCOPES     = ['User.Read','Sites.ReadWrite.All'];
 
-const msalConfig = {
-  auth: {
-    clientId: CLIENT_ID,
-    authority: 'https://login.microsoftonline.com/' + TENANT_ID,
-    redirectUri: window.location.origin + window.location.pathname,
-  },
-  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
-};
-
-var msalApp   = null;  // created inside window.onload so CDN failures are caught
-var msalReady = false; // true only after initialize() succeeds
+// Redirect URI: current page URL without query/hash
+var REDIRECT_URI = window.location.origin + window.location.pathname;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 var S = {
@@ -329,7 +319,54 @@ var S = {
 const LEAVE_TYPES = ['Annual Leave','Sick Leave','Maternity/Paternity Leave','Compassionate Leave','Study Leave','Unpaid Leave'];
 const DEF_ALLOW   = {UK:25,India:21};
 
-// ─── MSAL ─────────────────────────────────────────────────────────────────────
+// ─── OAuth 2.0 PKCE (no external library) ────────────────────────────────────
+var _AUTH_SCOPES = SCOPES.concat(['offline_access','openid','profile']).join(' ');
+var _TOKEN_URL   = 'https://login.microsoftonline.com/' + TENANT_ID + '/oauth2/v2.0/token';
+var _AUTH_URL    = 'https://login.microsoftonline.com/' + TENANT_ID + '/oauth2/v2.0/authorize';
+var _LOGOUT_URL  = 'https://login.microsoftonline.com/' + TENANT_ID + '/oauth2/v2.0/logout';
+
+function _b64url(buf) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function _pkce() {
+  var arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  var verifier = _b64url(arr);
+  var challenge = _b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  return { verifier: verifier, challenge: challenge };
+}
+function _saveTokens(d) {
+  localStorage.setItem('ls_at',  d.access_token);
+  localStorage.setItem('ls_exp', Date.now() + d.expires_in * 1000);
+  if (d.refresh_token) localStorage.setItem('ls_rt', d.refresh_token);
+  if (d.id_token) {
+    try {
+      var p = JSON.parse(atob(d.id_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (p.oid) localStorage.setItem('ls_oid', p.oid);
+    } catch(e) {}
+  }
+}
+function _clearTokens() {
+  ['ls_at','ls_exp','ls_rt','ls_oid'].forEach(function(k){ localStorage.removeItem(k); });
+}
+function _hasValidToken() {
+  return !!localStorage.getItem('ls_at') && Date.now() < parseInt(localStorage.getItem('ls_exp')||0) - 60000;
+}
+
+async function getToken() {
+  if (_hasValidToken()) return localStorage.getItem('ls_at');
+  var rt = localStorage.getItem('ls_rt');
+  if (!rt) { _clearTokens(); throw new Error('Session expired — please sign in again.'); }
+  var r = await fetch(_TOKEN_URL, {
+    method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({client_id:CLIENT_ID, grant_type:'refresh_token', refresh_token:rt, scope:_AUTH_SCOPES})
+  });
+  var d = await r.json();
+  if (!r.ok) { _clearTokens(); throw new Error('Session expired — please sign in again.'); }
+  _saveTokens(d);
+  return d.access_token;
+}
 
 
 
@@ -436,7 +473,7 @@ async function bootApp() {
       btn.disabled = false;
       btn.innerHTML = '<div class="ms-logo"><div style="background:#F25022"></div><div style="background:#7FBA00"></div><div style="background:#00A4EF"></div><div style="background:#FFB900"></div></div> Sign in with Microsoft';
     }
-    alert('Failed to load: ' + e.message);
+    showLoginError('Failed to load: ' + e.message);
   }
 }
 
@@ -639,93 +676,87 @@ function showLoginError(msg) {
 }
 
 async function signIn() {
-  if (!msalReady) { showLoginError('Still initialising — please wait a moment and try again.'); return; }
-  var btn = document.getElementById('sign-in-btn');
   var errEl = document.getElementById('login-error');
   if (errEl) errEl.style.display = 'none';
   try {
-    if (btn) { btn.disabled = true; btn.textContent = 'Signing in\u2026'; }
-    var result = await msalApp.loginPopup({ scopes: SCOPES });
-    msalApp.setActiveAccount(result.account);
-    await bootApp();
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-    // Popup was blocked — fall back to full-page redirect
-    if (e.errorCode === 'popup_window_error' || e.errorCode === 'empty_window_error') {
-      try {
-        await msalApp.loginRedirect({ scopes: SCOPES });
-        return; // page navigates away to Microsoft login
-      } catch (re) {
-        if (re.errorCode !== 'user_cancelled') showLoginError('Sign in failed: ' + re.message);
-      }
-    } else if (e.errorCode !== 'user_cancelled') {
-      showLoginError('Sign in failed: ' + (e.message || e.errorCode || e));
-    }
+    var pk = await _pkce();
+    var state = _b64url(crypto.getRandomValues(new Uint8Array(12)));
+    sessionStorage.setItem('pkce_v', pk.verifier);
+    sessionStorage.setItem('oauth_s', state);
+    var p = new URLSearchParams({
+      client_id: CLIENT_ID, response_type: 'code',
+      redirect_uri: REDIRECT_URI, scope: _AUTH_SCOPES,
+      code_challenge: pk.challenge, code_challenge_method: 'S256',
+      state: state, prompt: 'select_account', response_mode: 'query'
+    });
+    window.location.href = _AUTH_URL + '?' + p.toString();
+  } catch(e) {
+    showLoginError('Could not start sign-in: ' + e.message);
   }
 }
 
 function signOut() {
-  if (!msalApp) return;
-  var account = msalApp.getActiveAccount();
-  msalApp.logoutPopup({ account: account })
-    .catch(function () { msalApp.logoutRedirect({ account: account }); });
-}
-
-async function getToken() {
-  var account = msalApp ? msalApp.getActiveAccount() : null;
-  if (!account) throw new Error('Not signed in');
-  try {
-    var silent = await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
-    return silent.accessToken;
-  } catch (e) {
-    var popup = await msalApp.acquireTokenPopup({ scopes: SCOPES, account: account });
-    return popup.accessToken;
-  }
+  _clearTokens();
+  var p = new URLSearchParams({ client_id: CLIENT_ID, post_logout_redirect_uri: REDIRECT_URI });
+  window.location.href = _LOGOUT_URL + '?' + p.toString();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 window.onload = async function () {
   var btn = document.getElementById('sign-in-btn');
   try {
-    if (typeof msal === 'undefined') {
-      throw new Error('Microsoft sign-in library failed to load. Check your internet connection and refresh the page.');
-    }
+    // ── Handle return from Microsoft (auth code in URL) ──
+    var sp = new URLSearchParams(window.location.search);
+    if (sp.has('code') || sp.has('error')) {
+      showLoading('Completing sign-in\u2026');
 
-    msalApp = new msal.PublicClientApplication(msalConfig);
-    await msalApp.initialize();
+      if (sp.has('error')) {
+        var desc = (sp.get('error_description') || sp.get('error') || '').replace(/\+/g,' ');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        throw new Error('Microsoft returned: ' + desc);
+      }
 
-    // Handle the return leg of a redirect-based sign-in (popup-blocked fallback).
-    // Wrapped separately so stale redirect state never kills the whole init.
-    var redirectResult = null;
-    try {
-      redirectResult = await msalApp.handleRedirectPromise();
-    } catch (redirectErr) {
-      console.warn('[LeaveSync] Stale redirect state cleared:', redirectErr.message);
-    }
-    if (redirectResult && redirectResult.account) {
-      msalApp.setActiveAccount(redirectResult.account);
-      msalReady = true;
+      var savedState = sessionStorage.getItem('oauth_s');
+      if (sp.get('state') !== savedState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        throw new Error('State mismatch — please try signing in again.');
+      }
+
+      var verifier = sessionStorage.getItem('pkce_v');
+      sessionStorage.removeItem('pkce_v');
+      sessionStorage.removeItem('oauth_s');
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      var r = await fetch(_TOKEN_URL, {
+        method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+          client_id: CLIENT_ID, grant_type: 'authorization_code',
+          code: sp.get('code'), redirect_uri: REDIRECT_URI,
+          code_verifier: verifier, scope: _AUTH_SCOPES
+        })
+      });
+      var d = await r.json();
+      if (!r.ok) throw new Error((d.error_description || d.error || 'Token exchange failed ('+r.status+')').replace(/\+/g,' '));
+      _saveTokens(d);
       await bootApp();
       return;
     }
 
-    // Restore an existing cached session
-    var accounts = msalApp.getAllAccounts();
-    if (accounts.length > 0) {
-      msalApp.setActiveAccount(accounts[0]);
-      msalReady = true;
-      await bootApp();
-      return;
+    // ── Restore existing session ──
+    if (_hasValidToken()) {
+      try { await bootApp(); return; } catch(e) { _clearTokens(); }
+    }
+    if (localStorage.getItem('ls_rt')) {
+      try { await getToken(); await bootApp(); return; } catch(e) { _clearTokens(); }
     }
 
-    // No session — show login screen with button enabled
-    msalReady = true;
+    // ── No session — show login ──
     if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
 
   } catch (e) {
-    console.error('[LeaveSync] Init error:', e);
+    console.error('[LeaveSync]', e);
     if (btn) { btn.disabled = false; btn.innerHTML = MS_BTN_LABEL; }
-    showLoginError('App failed to load: ' + e.message);
+    showLoginError(e.message);
   }
 };
 </script>
