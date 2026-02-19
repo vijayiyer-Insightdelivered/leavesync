@@ -662,6 +662,558 @@ function renderTab(){
   }
 }
 
+// ─── Tab renderers ────────────────────────────────────────────────────────────
+function renderDashboard(){
+  var todayStr=today();
+  var onLeaveToday=S.leaves.filter(function(l){
+    return l.Status==='Approved'&&l.StartDate<=todayStr&&(l.EndDate||l.StartDate)>=todayStr;
+  }).length;
+  var pendingCount=S.leaves.filter(function(l){return l.Status==='Pending';}).length;
+  var myEmp=S.myEmpRecord;
+  var myAllowance=myEmp?getTotalAllowance(myEmp,S.year):0;
+  var myUsed=myEmp?getUsedDays(myEmp.id,S.year):0;
+  var myRemaining=Math.max(0,myAllowance-myUsed);
+  var pct=myAllowance>0?Math.round(myUsed/myAllowance*100):0;
+  var barColor=pct>80?'#EF4444':pct>60?'#F59E0B':'#22C55E';
+  var pendingLeaves=getVisibleLeaves().filter(function(l){return l.Status==='Pending';}).slice(0,6);
+
+  var o='<div class="page-header"><div><div class="page-title">Good '+greet()+', '+(S.user&&S.user.displayName?S.user.displayName.split(' ')[0]:'')+'</div>'
+    +'<div class="page-sub">'+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div></div></div>';
+
+  o+='<div class="kpi-grid">'
+    +'<div class="kpi" style="border-top-color:var(--navy)"><div class="kpi-val">'+S.employees.length+'</div><div class="kpi-label">Total Employees</div>'
+    +'<div class="kpi-sub">UK: '+S.employees.filter(function(e){return e.Country==='UK';}).length+' · India: '+S.employees.filter(function(e){return e.Country==='India';}).length+'</div></div>'
+    +'<div class="kpi" style="border-top-color:#F59E0B"><div class="kpi-val">'+pendingCount+'</div><div class="kpi-label">Pending Requests</div><div class="kpi-sub">Awaiting approval</div></div>'
+    +'<div class="kpi" style="border-top-color:#EF4444"><div class="kpi-val">'+onLeaveToday+'</div><div class="kpi-label">On Leave Today</div><div class="kpi-sub">'+todayStr+'</div></div>'
+    +'<div class="kpi" style="border-top-color:#22C55E"><div class="kpi-val">'+myRemaining+'</div><div class="kpi-label">My Remaining Days</div><div class="kpi-sub">'+myUsed+' used of '+myAllowance+'</div></div>'
+    +'</div>';
+
+  if(myEmp){
+    o+='<div class="card" style="padding:16px;margin-bottom:18px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--navy)">My Leave Balance — '+S.year+'</div>'
+      +'<div style="font-size:12px;color:var(--muted)">'+myUsed+' / '+myAllowance+' days used</div></div>'
+      +'<div class="progress-track"><div class="progress-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
+    LEAVE_TYPES.forEach(function(lt){
+      var n=S.leaves.filter(function(l){return l.EmployeeId===String(myEmp.id)&&l.LeaveType===lt&&l.Status!=='Rejected'&&new Date(l.StartDate).getFullYear()===S.year;})
+        .reduce(function(s,l){return s+(parseInt(l.WorkingDays)||0);},0);
+      if(n>0) o+='<div class="mini"><div class="mini-val">'+n+'</div><div class="mini-lbl">'+lt.replace(' Leave','')+'</div></div>';
+    });
+    o+='</div></div>';
+  }
+
+  o+='<div class="section-two">'
+    +'<div class="card" style="overflow:hidden">'
+    +'<div class="card-header"><div class="card-title">'+(canApprove()?'Pending Approvals':'My Recent Leaves')+'</div>'
+    +(pendingLeaves.length>0&&canApprove()?'<span class="link" onclick="S.tab=\'team\';render()">View all →</span>':'')+'</div>';
+  if(pendingLeaves.length===0){
+    o+='<div style="padding:28px;text-align:center;color:var(--muted);font-size:13px">No pending requests</div>';
+  } else {
+    o+='<table class="tbl"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th>'+(canApprove()?'<th></th>':'')+'</tr></thead><tbody>';
+    pendingLeaves.forEach(function(l){
+      var emp=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});
+      o+='<tr><td><div style="display:flex;align-items:center;gap:8px">'+avHtml(emp?emp.Title:'?',emp?emp.Country:'UK',28)
+        +'<div><div style="font-weight:600;font-size:12px">'+(emp?emp.Title:'Unknown')+'</div>'+countryBadge(emp?emp.Country:'UK')+'</div></div></td>'
+        +'<td style="font-size:12px">'+l.LeaveType+'</td>'
+        +'<td style="font-size:12px">'+fmt(l.StartDate)+(l.EndDate&&l.EndDate!==l.StartDate?' – '+fmt(l.EndDate):'')+'</td>'
+        +'<td style="font-weight:700">'+l.WorkingDays+'</td>';
+      if(canApprove()) o+='<td style="white-space:nowrap">'
+        +'<button class="btn-approve btn-sm" style="margin-right:4px" onclick="approveLeave(\''+l.id+'\')">✓</button>'
+        +'<button class="btn-ghost btn-sm btn-danger" onclick="rejectLeave(\''+l.id+'\')">✕</button></td>';
+      o+='</tr>';
+    });
+    o+='</tbody></table>';
+  }
+  o+='</div>';
+
+  o+='<div>';
+  ['UK','India'].forEach(function(country){
+    var emps=S.employees.filter(function(e){return e.Country===country;});
+    var onL=S.leaves.filter(function(l){
+      var e=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});
+      return l.Status==='Approved'&&l.StartDate<=todayStr&&(l.EndDate||l.StartDate)>=todayStr&&e&&e.Country===country;
+    }).length;
+    var pendC=S.leaves.filter(function(l){var e=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});return l.Status==='Pending'&&e&&e.Country===country;}).length;
+    o+='<div class="country-card" style="margin-bottom:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+countryBadge(country)
+      +'<span style="font-size:12px;color:var(--muted)">'+emps.length+' employees</span></div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<div class="mini"><div class="mini-val">'+onL+'</div><div class="mini-lbl">On Leave</div></div>'
+      +'<div class="mini"><div class="mini-val">'+pendC+'</div><div class="mini-lbl">Pending</div></div>'
+      +'</div></div>';
+  });
+  o+='</div></div>';
+  return o;
+}
+
+function renderMyLeave(){
+  var myEmp=S.myEmpRecord;
+  var myAllowance=myEmp?getTotalAllowance(myEmp,S.year):0;
+  var myUsed=myEmp?getUsedDays(myEmp.id,S.year):0;
+  var myRemaining=Math.max(0,myAllowance-myUsed);
+  var pct=myAllowance>0?Math.round(myUsed/myAllowance*100):0;
+  var barColor=pct>80?'#EF4444':pct>60?'#F59E0B':'#22C55E';
+  var myLeaves=S.leaves.filter(function(l){return l.AzureObjectId===S.user.id&&new Date(l.StartDate).getFullYear()===S.year;});
+  myLeaves.sort(function(a,b){return (b.StartDate||'').localeCompare(a.StartDate||'');});
+
+  var o='<div class="page-header"><div><div class="page-title">My Leave</div><div class="page-sub">'+S.year+' Summary</div></div></div>';
+
+  if(myEmp){
+    o+='<div style="display:flex;gap:13px;margin-bottom:14px;flex-wrap:wrap">'
+      +'<div class="kpi" style="border-top-color:var(--navy);flex:1"><div class="kpi-val">'+myAllowance+'</div><div class="kpi-label">Total Allowance</div><div class="kpi-sub">incl. carry forward</div></div>'
+      +'<div class="kpi" style="border-top-color:#F59E0B;flex:1"><div class="kpi-val">'+myUsed+'</div><div class="kpi-label">Days Used</div><div class="kpi-sub">Approved &amp; pending</div></div>'
+      +'<div class="kpi" style="border-top-color:#22C55E;flex:1"><div class="kpi-val">'+myRemaining+'</div><div class="kpi-label">Remaining</div><div class="kpi-sub">'+pct+'% used</div></div>'
+      +'</div>'
+      +'<div class="progress-track" style="margin-bottom:18px"><div class="progress-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>';
+  }
+
+  o+='<div class="card" style="overflow:hidden">'
+    +'<div class="card-header"><div class="card-title">Leave History</div></div>';
+  if(myLeaves.length===0){
+    o+='<div style="padding:32px;text-align:center;color:var(--muted)">No leave requests for '+S.year+'</div>';
+  } else {
+    o+='<table class="tbl"><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
+    myLeaves.forEach(function(l){
+      o+='<tr>'
+        +'<td style="font-weight:600;font-size:12px">'+l.LeaveType+'</td>'
+        +'<td style="font-size:12px">'+fmt(l.StartDate)+'</td>'
+        +'<td style="font-size:12px">'+fmt(l.EndDate)+'</td>'
+        +'<td style="font-weight:700">'+l.WorkingDays+'</td>'
+        +'<td>'+statusBadge(l.Status)+'</td>'
+        +'<td style="font-size:12px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.Notes||'—')+'</td>'
+        +'<td>'+(l.Status==='Pending'?'<button class="btn-ghost btn-sm btn-danger" onclick="cancelLeave(\''+l.id+'\')">Cancel</button>':'')+'</td>'
+        +'</tr>';
+    });
+    o+='</tbody></table>';
+  }
+  o+='</div>';
+  return o;
+}
+
+function renderTeamLeaves(){
+  var leaves=getVisibleLeaves().filter(function(l){
+    if(S.leavesStatus!=='All'&&l.Status!==S.leavesStatus) return false;
+    if(S.leavesCountry!=='All'){var e=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});if(!e||e.Country!==S.leavesCountry) return false;}
+    if(S.leavesType!=='All'&&l.LeaveType!==S.leavesType) return false;
+    if(S.leavesSearch){var e=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});if((e?e.Title:'').toLowerCase().indexOf(S.leavesSearch.toLowerCase())<0) return false;}
+    return true;
+  });
+  leaves.sort(function(a,b){return (b.StartDate||'').localeCompare(a.StartDate||'');});
+
+  var o='<div class="page-header"><div><div class="page-title">Team Leaves</div><div class="page-sub">'+leaves.length+' request'+(leaves.length!==1?'s':'')+'</div></div></div>'
+    +'<div class="filters">'
+    +'<div class="seg">';
+  ['All','Pending','Approved','Rejected'].forEach(function(s){
+    o+='<button class="seg-btn'+(S.leavesStatus===s?' active':'')+'" onclick="S.leavesStatus=\''+s+'\';renderInPlace()">'+s+'</button>';
+  });
+  o+='</div><div class="seg">';
+  ['All','UK','India'].forEach(function(c){
+    o+='<button class="seg-btn'+(S.leavesCountry===c?' active':'')+'" onclick="S.leavesCountry=\''+c+'\';renderInPlace()">'+c+'</button>';
+  });
+  o+='</div>'
+    +'<input class="inp inp-sm" style="width:200px" placeholder="Search employee…" value="'+S.leavesSearch+'" oninput="S.leavesSearch=this.value;renderInPlace()">'
+    +'</div>'
+    +'<div class="card" style="overflow:hidden">';
+  if(leaves.length===0){
+    o+='<div style="padding:32px;text-align:center;color:var(--muted)">No matching requests</div>';
+  } else {
+    o+='<table class="tbl"><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Notes</th>'+(canApprove()?'<th></th>':'')+'</tr></thead><tbody>';
+    leaves.forEach(function(l){
+      var emp=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});
+      o+='<tr>'
+        +'<td><div style="display:flex;align-items:center;gap:8px">'+avHtml(emp?emp.Title:'?',emp?emp.Country:'UK',26)
+        +'<div style="font-size:12px;font-weight:600">'+(emp?emp.Title:'Unknown')+'</div></div></td>'
+        +'<td style="font-size:12px">'+l.LeaveType+'</td>'
+        +'<td style="font-size:12px">'+fmt(l.StartDate)+'</td>'
+        +'<td style="font-size:12px">'+fmt(l.EndDate)+'</td>'
+        +'<td style="font-weight:700">'+l.WorkingDays+'</td>'
+        +'<td>'+statusBadge(l.Status)+'</td>'
+        +'<td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.Notes||'—')+'</td>';
+      if(canApprove()) o+='<td style="white-space:nowrap">'
+        +(l.Status==='Pending'?'<button class="btn-approve btn-sm" style="margin-right:4px" onclick="approveLeave(\''+l.id+'\')">✓</button>'
+        +'<button class="btn-ghost btn-sm btn-danger" onclick="rejectLeave(\''+l.id+'\')">✕</button>':'')+'</td>';
+      o+='</tr>';
+    });
+    o+='</tbody></table>';
+  }
+  o+='</div>';
+  return o;
+}
+
+function renderEmployees(){
+  var filtered=S.employees.filter(function(e){
+    if(S.empCountry!=='All'&&e.Country!==S.empCountry) return false;
+    if(S.empSearch&&(e.Title||'').toLowerCase().indexOf(S.empSearch.toLowerCase())<0) return false;
+    return true;
+  });
+
+  var o='<div class="page-header"><div><div class="page-title">Employees</div><div class="page-sub">'+filtered.length+' of '+S.employees.length+' employees</div></div></div>'
+    +'<div class="filters"><div class="seg">';
+  ['All','UK','India'].forEach(function(c){
+    o+='<button class="seg-btn'+(S.empCountry===c?' active':'')+'" onclick="S.empCountry=\''+c+'\';renderInPlace()">'+c+'</button>';
+  });
+  o+='</div><input class="inp inp-sm" style="width:220px" placeholder="Search by name…" value="'+S.empSearch+'" oninput="S.empSearch=this.value;renderInPlace()"></div>';
+
+  if(filtered.length===0){
+    o+='<div style="padding:32px;text-align:center;color:var(--muted)">No employees found</div>';
+    return o;
+  }
+  o+='<div class="emp-grid">';
+  filtered.forEach(function(emp){
+    var allowance=getTotalAllowance(emp,S.year);
+    var used=getUsedDays(emp.id,S.year);
+    var remaining=Math.max(0,allowance-used);
+    var pct=allowance>0?Math.round(used/allowance*100):0;
+    var barColor=pct>80?'#EF4444':pct>60?'#F59E0B':'#22C55E';
+    var myRole=S.roles.find(function(r){return r.AzureObjectId===emp.AzureObjectId;});
+    var role=myRole?myRole.Role:'Employee';
+    o+='<div class="emp-card">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+      +avHtml(emp.Title,emp.Country,40)
+      +'<div><div style="font-weight:700;font-size:13px">'+(emp.Title||'—')+'</div>'
+      +'<div style="margin-top:3px">'+countryBadge(emp.Country)+' '+roleBadge(role)+'</div></div></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Leave used</span><span>'+used+' / '+allowance+' days</span></div>'
+      +'<div class="progress-track"><div class="progress-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:10px">'
+      +'<div style="font-size:11px;color:var(--muted)">'+remaining+' days remaining</div>';
+    if(canManageEmployees()) o+='<button class="btn-ghost btn-sm" onclick="editEmployee(\''+emp.id+'\')">Edit</button>';
+    o+='</div></div>';
+  });
+  o+='</div>';
+  return o;
+}
+
+function renderCalendar(){
+  var year=S.calYear,month=S.calMonth;
+  var mNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var dInMonth=new Date(year,month+1,0).getDate();
+  var firstDay=(new Date(year,month,1).getDay()+6)%7; // Mon=0
+  var todayStr=today();
+  var dNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  var o='<div class="page-header"><div><div class="page-title">Calendar</div><div class="page-sub">'+mNames[month]+' '+year+'</div></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="btn-ghost btn-sm" onclick="S.calMonth--;if(S.calMonth<0){S.calMonth=11;S.calYear--;}renderInPlace()">&#8592; Prev</button>'
+    +'<button class="btn-ghost btn-sm" onclick="S.calMonth++;if(S.calMonth>11){S.calMonth=0;S.calYear++;}renderInPlace()">Next &#8594;</button>'
+    +'</div></div>'
+    +'<div class="card" style="overflow:hidden"><div class="cal-grid">';
+  dNames.forEach(function(d){o+='<div class="cal-hdr">'+d+'</div>';});
+  for(var i=0;i<firstDay;i++) o+='<div class="cal-blank"></div>';
+  for(var d=1;d<=dInMonth;d++){
+    var ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var isToday=ds===todayStr;
+    var isWknd=isWeekend(ds);
+    var dayLeaves=getVisibleLeaves().filter(function(l){return l.Status!=='Rejected'&&l.StartDate<=ds&&(l.EndDate||l.StartDate)>=ds;});
+    o+='<div class="cal-day'+(isWknd?' weekend':'')+(isToday?' cal-today':'')+'">'
+      +'<div class="cal-num">'+d+'</div>';
+    dayLeaves.slice(0,3).forEach(function(l){
+      var emp=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});
+      var bg=l.Status==='Approved'?'#DBEAFE':'#FEF3C7';
+      var tc=l.Status==='Approved'?'#1251A3':'#92400E';
+      o+='<div class="cal-tag" style="background:'+bg+';color:'+tc+'">'+(emp?emp.Title.split(' ')[0]:'?')+'</div>';
+    });
+    if(dayLeaves.length>3) o+='<div class="cal-tag" style="background:#F3F4F6;color:#6B7580">+'+(dayLeaves.length-3)+' more</div>';
+    o+='</div>';
+  }
+  var total=firstDay+dInMonth;
+  var rem=total%7;
+  if(rem>0) for(var i=0;i<7-rem;i++) o+='<div class="cal-blank"></div>';
+  o+='</div></div>';
+  return o;
+}
+
+function renderHolidays(){
+  var holYear=S.holYear||S.year;
+  var hols=S.holidays.filter(function(h){return new Date(h.HolidayDate).getFullYear()===holYear;});
+  hols.sort(function(a,b){return (a.HolidayDate||'').localeCompare(b.HolidayDate||'');});
+
+  var o='<div class="page-header"><div><div class="page-title">Public Holidays</div><div class="page-sub">'+holYear+'</div></div>'
+    +(isAdmin()?'<button class="btn-primary btn-sm" onclick="openAddHoliday()">+ Add Holiday</button>':'')+'</div>'
+    +'<div class="country-row">';
+  ['UK','India'].forEach(function(country){
+    var ch=hols.filter(function(h){return h.Country===country;});
+    o+='<div class="country-card"><div style="font-size:14px;font-weight:700;margin-bottom:12px">'+countryBadge(country)+' <span style="margin-left:6px">'+country+'</span></div>';
+    if(ch.length===0){
+      o+='<div style="color:var(--muted);font-size:13px">No holidays defined</div>';
+    } else {
+      o+='<table class="tbl"><thead><tr><th>Date</th><th>Holiday</th>'+(isAdmin()?'<th></th>':'')+'</tr></thead><tbody>';
+      ch.forEach(function(h){
+        o+='<tr><td style="font-size:12px">'+fmt(h.HolidayDate)+'<br><span style="color:var(--muted);font-size:10px">'+fmtWday(h.HolidayDate)+'</span></td>'
+          +'<td style="font-weight:600;font-size:12px">'+(h.Title||'—')+'</td>';
+        if(isAdmin()) o+='<td><button class="btn-ghost btn-sm btn-danger" onclick="deleteHoliday(\''+h.id+'\')">✕</button></td>';
+        o+='</tr>';
+      });
+      o+='</tbody></table>';
+    }
+    o+='</div>';
+  });
+  o+='</div>';
+  return o;
+}
+
+function renderReports(){
+  var leaves=S.leaves.filter(function(l){return new Date(l.StartDate).getFullYear()===S.year&&l.Status!=='Rejected';});
+  var typeData={};
+  LEAVE_TYPES.forEach(function(t){typeData[t]=0;});
+  leaves.forEach(function(l){if(typeData[l.LeaveType]!==undefined) typeData[l.LeaveType]+=(parseInt(l.WorkingDays)||0);});
+  var maxD=Math.max.apply(null,LEAVE_TYPES.map(function(t){return typeData[t];}))||1;
+
+  var o='<div class="page-header"><div><div class="page-title">Reports</div><div class="page-sub">'+S.year+' Leave Analytics</div></div></div>'
+    +'<div class="section-two">'
+    +'<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">Leave by Type</div>';
+  LEAVE_TYPES.forEach(function(t){
+    var d=typeData[t];
+    var pct=Math.round(d/maxD*100);
+    o+='<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>'+t+'</span><span style="font-weight:700">'+d+' days</span></div>'
+      +'<div class="rep-bar-track"><div class="rep-bar-fill" style="width:'+pct+'%;background:var(--navy)"></div></div></div>';
+  });
+  o+='</div>'
+    +'<div class="card" style="overflow:hidden"><div class="card-header"><div class="card-title">Employee Utilization</div></div>'
+    +'<table class="tbl"><thead><tr><th>Employee</th><th>Country</th><th>Allowance</th><th>Used</th><th>Left</th><th>%</th></tr></thead><tbody>';
+  var sorted=S.employees.slice().sort(function(a,b){
+    var ua=getUsedDays(a.id,S.year),ub=getUsedDays(b.id,S.year);
+    var aa=getTotalAllowance(a,S.year)||1,ab=getTotalAllowance(b,S.year)||1;
+    return (ub/ab)-(ua/aa);
+  });
+  sorted.forEach(function(emp){
+    var al=getTotalAllowance(emp,S.year);
+    var us=getUsedDays(emp.id,S.year);
+    var rem=Math.max(0,al-us);
+    var pct=al>0?Math.round(us/al*100):0;
+    o+='<tr>'
+      +'<td style="font-size:12px;font-weight:600">'+(emp.Title||'—')+'</td>'
+      +'<td>'+countryBadge(emp.Country)+'</td>'
+      +'<td style="text-align:center">'+al+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+us+'</td>'
+      +'<td style="text-align:center">'+rem+'</td>'
+      +'<td style="text-align:center"><span style="font-weight:700;color:'+(pct>80?'var(--red)':pct>60?'#92400E':'var(--green)')+'">'+pct+'%</span></td>'
+      +'</tr>';
+  });
+  o+='</tbody></table></div></div>';
+  return o;
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+function openApplyLeave(){
+  if(!S.myEmpRecord){ toast('Your employee profile was not found. Please contact HR.','err'); return; }
+  var myEmp=S.myEmpRecord;
+  var remaining=Math.max(0,getTotalAllowance(myEmp,S.year)-getUsedDays(myEmp.id,S.year));
+  var balClass=remaining>5?'bal-ok':'bal-warn';
+  var html='<div class="modal-header"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="closeModal()">✕</button></div>'
+    +'<div class="modal-body">'
+    +'<div class="bal-chip '+balClass+'">'+remaining+' days remaining in '+S.year+'</div>'
+    +'<div class="field"><label class="field-label">Leave Type</label>'
+    +'<select class="inp" id="ml-type"><option value="">Select type…</option>';
+  LEAVE_TYPES.forEach(function(t){html+='<option>'+t+'</option>';});
+  html+='</select></div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">From</label><input type="date" class="inp" id="ml-start" value="'+today()+'" onchange="calcLeaveDays()"></div>'
+    +'<div class="field"><label class="field-label">To</label><input type="date" class="inp" id="ml-end" value="'+today()+'" onchange="calcLeaveDays()"></div>'
+    +'</div>'
+    +'<div id="ml-days-info" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:18px"></div>'
+    +'<div class="field"><label class="field-label">Notes (optional)</label><textarea class="inp" id="ml-notes" rows="3" style="resize:vertical"></textarea></div>'
+    +'<div class="modal-actions"><button class="btn-primary" onclick="submitLeave()">Submit Request</button><button class="btn-ghost" onclick="closeModal()">Cancel</button></div>'
+    +'</div>';
+  openModal(html);
+  calcLeaveDays();
+}
+
+function calcLeaveDays(){
+  var s=document.getElementById('ml-start'),e=document.getElementById('ml-end'),info=document.getElementById('ml-days-info');
+  if(!s||!e||!info) return;
+  if(!s.value||!e.value){info.textContent='';return;}
+  var country=S.myEmpRecord?S.myEmpRecord.Country:'UK';
+  var d=calcWorkingDays(s.value,e.value,country);
+  info.textContent=d>0?d+' working day'+(d!==1?'s':'')+' selected':'No working days in selected range';
+}
+
+async function submitLeave(){
+  var type=document.getElementById('ml-type').value;
+  var start=document.getElementById('ml-start').value;
+  var end=document.getElementById('ml-end').value;
+  var notes=(document.getElementById('ml-notes').value||'').trim();
+  if(!type){toast('Please select a leave type','err');return;}
+  if(!start||!end){toast('Please select dates','err');return;}
+  if(end<start){toast('End date must be on or after start date','err');return;}
+  var country=S.myEmpRecord?S.myEmpRecord.Country:'UK';
+  var days=calcWorkingDays(start,end,country);
+  if(days<=0){toast('No working days in selected range','err');return;}
+  try{
+    await createListItem(S.siteId,S.lists.LeaveRequests,{
+      Title:(S.user.displayName||'')+' - '+type,
+      EmployeeId:String(S.myEmpRecord?S.myEmpRecord.id:''),
+      AzureObjectId:S.user.id,
+      LeaveType:type,StartDate:start,EndDate:end,
+      WorkingDays:days,Status:'Pending',Notes:notes
+    });
+    closeModal();toast('Leave request submitted');
+    await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function cancelLeave(id){
+  if(!confirm('Cancel this leave request?')) return;
+  try{
+    await deleteListItem(S.siteId,S.lists.LeaveRequests,id);
+    toast('Request cancelled');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function approveLeave(id){
+  try{
+    await updateListItem(S.siteId,S.lists.LeaveRequests,id,{Status:'Approved'});
+    toast('Leave approved');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function rejectLeave(id){
+  try{
+    await updateListItem(S.siteId,S.lists.LeaveRequests,id,{Status:'Rejected'});
+    toast('Leave rejected','err');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function openAddEmployee(){
+  var html='<div class="modal-header"><div class="modal-title">Add Employee</div><button class="modal-close" onclick="closeModal()">✕</button></div>'
+    +'<div class="modal-body">'
+    +'<div class="field"><label class="field-label">Full Name</label><input class="inp" id="ae-name" placeholder="First Last"></div>'
+    +'<div class="field"><label class="field-label">Azure Object ID</label><input class="inp" id="ae-oid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><div style="font-size:11px;color:var(--muted);margin-top:4px">Find in Azure AD → Users → Profile</div></div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">Country</label><select class="inp" id="ae-country"><option>UK</option><option>India</option></select></div>'
+    +'<div class="field"><label class="field-label">Role</label><select class="inp" id="ae-role"><option>Employee</option><option>Manager</option><option>HR</option><option>Admin</option></select></div>'
+    +'</div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">Annual Allowance (days)</label><input type="number" class="inp" id="ae-allowance" value="25" min="0" max="60"></div>'
+    +'<div class="field"><label class="field-label">Join Date</label><input type="date" class="inp" id="ae-join" value="'+today()+'"></div>'
+    +'</div>'
+    +'<div class="cf-box">'
+    +'<div class="cf-title">Carry Forward</div>'
+    +'<label class="check-row"><input type="checkbox" id="ae-cf"> Enable carry forward</label>'
+    +'<div class="field"><label class="field-label">Max carry forward days</label><input type="number" class="inp" id="ae-cfmax" value="5" min="0" max="30"></div>'
+    +'</div>'
+    +'<div class="modal-actions"><button class="btn-primary" onclick="saveNewEmployee()">Add Employee</button><button class="btn-ghost" onclick="closeModal()">Cancel</button></div>'
+    +'</div>';
+  openModal(html,true);
+}
+
+async function saveNewEmployee(){
+  var name=(document.getElementById('ae-name').value||'').trim();
+  var oid=(document.getElementById('ae-oid').value||'').trim();
+  var country=document.getElementById('ae-country').value;
+  var role=document.getElementById('ae-role').value;
+  var allowance=parseInt(document.getElementById('ae-allowance').value)||25;
+  var join=document.getElementById('ae-join').value;
+  var cfEnabled=document.getElementById('ae-cf').checked;
+  var cfMax=parseInt(document.getElementById('ae-cfmax').value)||5;
+  if(!name){toast('Please enter a name','err');return;}
+  try{
+    await createListItem(S.siteId,S.lists.Employees,{
+      Title:name,AzureObjectId:oid,Country:country,
+      AnnualAllowance:allowance,JoinDate:join,
+      CarryForwardEnabled:cfEnabled,MaxCarryForward:cfMax
+    });
+    if(oid&&S.lists.Roles){
+      await createListItem(S.siteId,S.lists.Roles,{Title:name,AzureObjectId:oid,Role:role});
+    }
+    closeModal();toast('Employee added');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function editEmployee(id){
+  var emp=S.employees.find(function(e){return String(e.id)===String(id);});
+  if(!emp) return;
+  var roleRec=S.roles.find(function(r){return r.AzureObjectId===emp.AzureObjectId;});
+  var role=roleRec?roleRec.Role:'Employee';
+  var esc=function(s){return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');};
+  var html='<div class="modal-header"><div class="modal-title">Edit Employee</div><button class="modal-close" onclick="closeModal()">✕</button></div>'
+    +'<div class="modal-body">'
+    +'<div class="field"><label class="field-label">Full Name</label><input class="inp" id="ee-name" value="'+esc(emp.Title)+'"></div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">Country</label><select class="inp" id="ee-country"><option'+(emp.Country==='UK'?' selected':'')+'>UK</option><option'+(emp.Country==='India'?' selected':'')+'>India</option></select></div>'
+    +'<div class="field"><label class="field-label">Role</label><select class="inp" id="ee-role"><option'+(role==='Employee'?' selected':'')+'>Employee</option><option'+(role==='Manager'?' selected':'')+'>Manager</option><option'+(role==='HR'?' selected':'')+'>HR</option><option'+(role==='Admin'?' selected':'')+'>Admin</option></select></div>'
+    +'</div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">Annual Allowance</label><input type="number" class="inp" id="ee-allowance" value="'+(emp.AnnualAllowance||25)+'" min="0" max="60"></div>'
+    +'<div class="field"><label class="field-label">Join Date</label><input type="date" class="inp" id="ee-join" value="'+(emp.JoinDate?emp.JoinDate.split('T')[0]:'')+'"></div>'
+    +'</div>'
+    +'<div class="cf-box">'
+    +'<div class="cf-title">Carry Forward</div>'
+    +'<label class="check-row"><input type="checkbox" id="ee-cf"'+(emp.CarryForwardEnabled?' checked':'')+'>Enable carry forward</label>'
+    +'<div class="field"><label class="field-label">Max carry forward days</label><input type="number" class="inp" id="ee-cfmax" value="'+(emp.MaxCarryForward||5)+'" min="0" max="30"></div>'
+    +'</div>'
+    +'<div class="modal-actions">'
+    +'<button class="btn-primary" onclick="saveEditEmployee(\''+id+'\',\''+esc(emp.AzureObjectId)+'\')">Save</button>'
+    +'<button class="btn-ghost btn-sm btn-danger" onclick="deleteEmployee(\''+id+'\')">Delete</button>'
+    +'<button class="btn-ghost" onclick="closeModal()">Cancel</button>'
+    +'</div></div>';
+  openModal(html,true);
+}
+
+async function saveEditEmployee(id,oid){
+  var name=(document.getElementById('ee-name').value||'').trim();
+  var country=document.getElementById('ee-country').value;
+  var role=document.getElementById('ee-role').value;
+  var allowance=parseInt(document.getElementById('ee-allowance').value)||25;
+  var join=document.getElementById('ee-join').value;
+  var cfEnabled=document.getElementById('ee-cf').checked;
+  var cfMax=parseInt(document.getElementById('ee-cfmax').value)||5;
+  if(!name){toast('Please enter a name','err');return;}
+  try{
+    await updateListItem(S.siteId,S.lists.Employees,id,{
+      Title:name,Country:country,AnnualAllowance:allowance,
+      JoinDate:join,CarryForwardEnabled:cfEnabled,MaxCarryForward:cfMax
+    });
+    if(oid&&S.lists.Roles){
+      var rr=S.roles.find(function(r){return r.AzureObjectId===oid;});
+      if(rr) await updateListItem(S.siteId,S.lists.Roles,rr.id,{Role:role});
+      else await createListItem(S.siteId,S.lists.Roles,{Title:name,AzureObjectId:oid,Role:role});
+    }
+    closeModal();toast('Employee updated');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function deleteEmployee(id){
+  if(!confirm('Delete this employee? This cannot be undone.')) return;
+  try{
+    await deleteListItem(S.siteId,S.lists.Employees,id);
+    closeModal();toast('Employee deleted','err');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function openAddHoliday(){
+  var html='<div class="modal-header"><div class="modal-title">Add Public Holiday</div><button class="modal-close" onclick="closeModal()">✕</button></div>'
+    +'<div class="modal-body">'
+    +'<div class="field"><label class="field-label">Holiday Name</label><input class="inp" id="ah-name" placeholder="e.g. Christmas Day"></div>'
+    +'<div class="grid-2">'
+    +'<div class="field"><label class="field-label">Date</label><input type="date" class="inp" id="ah-date"></div>'
+    +'<div class="field"><label class="field-label">Country</label><select class="inp" id="ah-country"><option>UK</option><option>India</option></select></div>'
+    +'</div>'
+    +'<div class="modal-actions"><button class="btn-primary" onclick="saveHoliday()">Add Holiday</button><button class="btn-ghost" onclick="closeModal()">Cancel</button></div>'
+    +'</div>';
+  openModal(html);
+}
+
+async function saveHoliday(){
+  var name=(document.getElementById('ah-name').value||'').trim();
+  var date=document.getElementById('ah-date').value;
+  var country=document.getElementById('ah-country').value;
+  if(!name||!date){toast('Please fill all fields','err');return;}
+  try{
+    await createListItem(S.siteId,S.lists.PublicHolidays,{Title:name,HolidayDate:date,Country:country});
+    closeModal();toast('Holiday added');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function deleteHoliday(id){
+  if(!confirm('Delete this holiday?')) return;
+  try{
+    await deleteListItem(S.siteId,S.lists.PublicHolidays,id);
+    toast('Holiday deleted','err');await refreshData();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+
 const MS_BTN_LABEL = '<div class="ms-logo">'
   + '<div style="background:#F25022"></div>'
   + '<div style="background:#7FBA00"></div>'
