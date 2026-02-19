@@ -516,17 +516,23 @@ async function refreshData() {
 
 // ─── UI State helpers ─────────────────────────────────────────────────────────
 function showLoading(msg) {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('loading-screen').style.display = 'flex';
-  document.getElementById('app-screen').style.display = 'none';
+  const login = document.getElementById('login-screen');
+  const loading = document.getElementById('loading-screen');
+  const app = document.getElementById('app-screen');
+  if (login) login.style.display = 'none';
+  if (loading) loading.style.display = 'flex';
+  if (app) app.style.display = 'none';
   setLoadingMsg(msg);
 }
 function setLoadingMsg(msg) {
-  document.getElementById('loading-msg').textContent = msg;
+  const el = document.getElementById('loading-msg');
+  if (el) el.textContent = msg;
 }
 function hideLoading() {
-  document.getElementById('loading-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
+  const loading = document.getElementById('loading-screen');
+  const login = document.getElementById('login-screen');
+  if (loading) loading.style.display = 'none';
+  if (login) login.style.display = 'flex';
 }
 function showApp() {
   document.getElementById('loading-screen').style.display = 'none';
@@ -1665,7 +1671,7 @@ function dlCSV(rows,filename){
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-(async function init() {
+window.addEventListener("DOMContentLoaded", async function init() {
   const signInBtn = document.querySelector('.ms-btn');
   if (signInBtn) { signInBtn.disabled = true; signInBtn.textContent = 'Loading...'; }
   try {
@@ -1695,7 +1701,7 @@ function dlCSV(rows,filename){
     if (signInBtn) { signInBtn.disabled = false; signInBtn.textContent = 'Sign in with Microsoft'; }
     console.error('Init error:', e);
   }
-})();
+});
 </script>
 </body>
 </html>
