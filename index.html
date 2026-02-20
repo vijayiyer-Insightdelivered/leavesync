@@ -773,7 +773,7 @@ function renderMyLeave(){
   if(myLeaves.length===0){
     o+='<div style="padding:32px;text-align:center;color:var(--muted)">No leave requests for '+S.year+'</div>';
   } else {
-    o+='<table class="tbl"><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
+    o+='<table class="tbl"><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th></th></tr></thead><tbody>';
     myLeaves.forEach(function(l){
       o+='<tr>'
         +'<td style="font-weight:600;font-size:12px">'+l.LeaveType+'</td>'
@@ -781,7 +781,6 @@ function renderMyLeave(){
         +'<td style="font-size:12px">'+fmt(l.EndDate)+'</td>'
         +'<td style="font-weight:700">'+l.WorkingDays+'</td>'
         +'<td>'+statusBadge(l.Status)+'</td>'
-        +'<td style="font-size:12px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.Notes||'—')+'</td>'
         +'<td>'+(l.Status==='Pending'?'<button class="btn-ghost btn-sm btn-danger" onclick="cancelLeave(\''+l.id+'\')">Cancel</button>':'')+'</td>'
         +'</tr>';
     });
@@ -818,7 +817,7 @@ function renderTeamLeaves(){
   if(leaves.length===0){
     o+='<div style="padding:32px;text-align:center;color:var(--muted)">No matching requests</div>';
   } else {
-    o+='<table class="tbl"><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Notes</th>'+(canApprove()?'<th></th>':'')+'</tr></thead><tbody>';
+    o+='<table class="tbl"><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th>'+(canApprove()?'<th></th>':'')+'</tr></thead><tbody>';
     leaves.forEach(function(l){
       var emp=S.employees.find(function(e){return String(e.id)===l.EmployeeId;});
       o+='<tr>'
@@ -828,8 +827,7 @@ function renderTeamLeaves(){
         +'<td style="font-size:12px">'+fmt(l.StartDate)+'</td>'
         +'<td style="font-size:12px">'+fmt(l.EndDate)+'</td>'
         +'<td style="font-weight:700">'+l.WorkingDays+'</td>'
-        +'<td>'+statusBadge(l.Status)+'</td>'
-        +'<td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.Notes||'—')+'</td>';
+        +'<td>'+statusBadge(l.Status)+'</td>';
       if(canApprove()) o+='<td style="white-space:nowrap">'
         +(l.Status==='Pending'?'<button class="btn-approve btn-sm" style="margin-right:4px" onclick="approveLeave(\''+l.id+'\')">✓</button>'
         +'<button class="btn-ghost btn-sm btn-danger" onclick="rejectLeave(\''+l.id+'\')">✕</button>':'')+'</td>';
@@ -1011,8 +1009,7 @@ function openApplyLeave(){
     +'<div class="field"><label class="field-label">From</label><input type="date" class="inp" id="ml-start" value="'+today()+'" onchange="calcLeaveDays()"></div>'
     +'<div class="field"><label class="field-label">To</label><input type="date" class="inp" id="ml-end" value="'+today()+'" onchange="calcLeaveDays()"></div>'
     +'</div>'
-    +'<div id="ml-days-info" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:18px"></div>'
-    +'<div class="field"><label class="field-label">Notes (optional)</label><textarea class="inp" id="ml-notes" rows="3" style="resize:vertical"></textarea></div>'
+    +'<div id="ml-days-info" style="font-size:12px;color:var(--muted);margin-bottom:16px;min-height:18px"></div>'
     +'<div class="modal-actions"><button class="btn-primary" onclick="submitLeave()">Submit Request</button><button class="btn-ghost" onclick="closeModal()">Cancel</button></div>'
     +'</div>';
   openModal(html);
@@ -1032,7 +1029,6 @@ async function submitLeave(){
   var type=document.getElementById('ml-type').value;
   var start=document.getElementById('ml-start').value;
   var end=document.getElementById('ml-end').value;
-  var notes=(document.getElementById('ml-notes').value||'').trim();
   if(!type){toast('Please select a leave type','err');return;}
   if(!start||!end){toast('Please select dates','err');return;}
   if(end<start){toast('End date must be on or after start date','err');return;}
@@ -1045,7 +1041,7 @@ async function submitLeave(){
       EmployeeId:String(S.myEmpRecord?S.myEmpRecord.id:''),
       AzureObjectId:S.user.id,
       LeaveType:type,StartDate:start,EndDate:end,
-      WorkingDays:days,Status:'Pending',Notes:notes
+      WorkingDays:days,Status:'Pending'
     });
     closeModal();toast('Leave request submitted');
     await refreshData();
