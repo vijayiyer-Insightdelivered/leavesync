@@ -904,7 +904,11 @@ function renderCalendar(){
     var ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     var isToday=ds===todayStr;
     var isWknd=isWeekend(ds);
-    var dayLeaves=getVisibleLeaves().filter(function(l){return l.Status!=='Rejected'&&l.StartDate<=ds&&(l.EndDate||l.StartDate)>=ds;});
+    var dayLeaves=getVisibleLeaves().filter(function(l){
+      var ls=(l.StartDate||'').substring(0,10);
+      var le=(l.EndDate||l.StartDate||'').substring(0,10);
+      return l.Status!=='Rejected'&&ls<=ds&&le>=ds;
+    });
     o+='<div class="cal-day'+(isWknd?' weekend':'')+(isToday?' cal-today':'')+'">'
       +'<div class="cal-num">'+d+'</div>';
     dayLeaves.slice(0,3).forEach(function(l){
@@ -1063,14 +1067,20 @@ async function cancelLeave(id){
 async function approveLeave(id){
   try{
     await updateListItem(S.siteId,S.lists.LeaveRequests,id,{Status:'Approved'});
-    toast('Leave approved');await refreshData();
+    var item=S.leaves.find(function(l){return l.id===id;});
+    if(item) item.Status='Approved';
+    toast('Leave approved');renderInPlace();
+    await refreshData();
   }catch(e){toast('Error: '+e.message,'err');}
 }
 
 async function rejectLeave(id){
   try{
     await updateListItem(S.siteId,S.lists.LeaveRequests,id,{Status:'Rejected'});
-    toast('Leave rejected','err');await refreshData();
+    var item=S.leaves.find(function(l){return l.id===id;});
+    if(item) item.Status='Rejected';
+    toast('Leave rejected','err');renderInPlace();
+    await refreshData();
   }catch(e){toast('Error: '+e.message,'err');}
 }
 
