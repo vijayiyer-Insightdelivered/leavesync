@@ -508,15 +508,21 @@ function showApp() {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function localDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function isWeekend(ds){ var d=new Date(ds); return d.getDay()===0||d.getDay()===6; }
-function isHoliday(ds,country){ return S.holidays.some(function(h){ return h.HolidayDate&&h.HolidayDate.split('T')[0]===ds&&h.Country===country; }); }
+function isHoliday(ds,country){
+  return S.holidays.some(function(h){
+    if(!h.HolidayDate||h.Country!==country) return false;
+    return localDateStr(new Date(h.HolidayDate))===ds;
+  });
+}
 
 function calcWorkingDays(start,end,country){
   if(!start||!end||end<start) return 0;
   var n=0, cur=new Date(start), last=new Date(end);
   while(cur<=last){
-    var ds=cur.toISOString().split('T')[0];
+    var ds=localDateStr(cur);
     if(!isWeekend(ds)&&!isHoliday(ds,country)) n++;
     cur.setDate(cur.getDate()+1);
   }
@@ -1037,7 +1043,7 @@ function calcLeaveDays(){
     var cur=new Date(s.value),last=new Date(e.value);
     var hasHoliday=false;
     while(cur<=last){
-      var ds=cur.toISOString().split('T')[0];
+      var ds=localDateStr(cur);
       if(!isWeekend(ds)&&isHoliday(ds,country)){hasHoliday=true;break;}
       cur.setDate(cur.getDate()+1);
     }
