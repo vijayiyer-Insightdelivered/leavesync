@@ -484,7 +484,14 @@ async function loadAllData() {
     S.lists.Roles         ? getListItems(S.siteId, S.lists.Roles)          : Promise.resolve([]),
     S.lists.PublicHolidays? getListItems(S.siteId, S.lists.PublicHolidays) : Promise.resolve([]),
   ]);
-  S.employees = results[0]; S.leaves = results[1]; S.roles = results[2]; S.holidays = results[3];
+  // Normalize all SharePoint date fields to local "YYYY-MM-DD" strings so
+  // timezone-shifted values (e.g. midnight IST stored as prior-day UTC) don't
+  // cause off-by-one errors in comparisons and calendar rendering.
+  function nd(ds){ if(!ds) return ds; var d=new Date(ds); return isNaN(d)?ds:localDateStr(d); }
+  S.employees = results[0].map(function(e){ e.JoinDate=nd(e.JoinDate); return e; });
+  S.leaves    = results[1].map(function(l){ l.StartDate=nd(l.StartDate); l.EndDate=nd(l.EndDate); return l; });
+  S.roles     = results[2];
+  S.holidays  = results[3].map(function(h){ h.HolidayDate=nd(h.HolidayDate); return h; });
 }
 
 async function refreshData() { await loadAllData(); renderInPlace(); }
@@ -512,10 +519,7 @@ function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth
 function localDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function isWeekend(ds){ var d=new Date(ds); return d.getDay()===0||d.getDay()===6; }
 function isHoliday(ds,country){
-  return S.holidays.some(function(h){
-    if(!h.HolidayDate||h.Country!==country) return false;
-    return localDateStr(new Date(h.HolidayDate))===ds;
-  });
+  return S.holidays.some(function(h){ return h.HolidayDate===ds&&h.Country===country; });
 }
 
 function calcWorkingDays(start,end,country){
